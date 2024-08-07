@@ -24,29 +24,34 @@ const (
 )
 
 type Store struct {
-	db db.DB
+	db  db.DB
+	wal *WAL
 }
 
 func NewStore(dbPath string) (*Store, error) {
-	db, err := safeOpenDB(dbPath, &bolt.Options{
-		NoSync: true,
-	})
+	db, err := safeOpenDB(dbPath, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize the database with the needed buckets if they do not exist.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	s := &Store{db: db}
+	if err := s.AutoMigrate(); err != nil {
+		return nil, err
+	}
+	s.wal = NewWAL(db)
+	return s, nil
+}
+
+// AutoMigrate will initialize the database with the needed buckets if they do not exist.
+func (s *Store) AutoMigrate() error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		for _, b := range []string{resultBucket, linksBucket, byResultBucket, backlinksBucket} {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {
 				return err
 			}
 		}
 		return nil
-	}); err != nil {
-		return nil, err
-	}
-	return &Store{db: db}, nil
+	})
 }
 
 func (s *Store) Exists(id string) bool {
@@ -305,32 +310,7 @@ func (s *Store) emptyBranchWithParents(tx *bolt.Tx, id []byte) error {
 }
 
 func (s *Store) AddLink(id string, link solver.CacheInfoLink, target string) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.Bucket([]byte(linksBucket)).CreateBucketIfNotExists([]byte(id))
-		if err != nil {
-			return err
-		}
-
-		dt, err := json.Marshal(link)
-		if err != nil {
-			return err
-		}
-
-		if err := b.Put(bytes.Join([][]byte{dt, []byte(target)}, []byte("@")), []byte{}); err != nil {
-			return err
-		}
-
-		b, err = tx.Bucket([]byte(backlinksBucket)).CreateBucketIfNotExists([]byte(target))
-		if err != nil {
-			return err
-		}
-
-		if err := b.Put([]byte(id), []byte{}); err != nil {
-			return err
-		}
-
-		return nil
-	})
+	return s.wal.AddLink(id, link, target)
 }
 
 func (s *Store) WalkLinks(id string, link solver.CacheInfoLink, fn func(id string) error) error {

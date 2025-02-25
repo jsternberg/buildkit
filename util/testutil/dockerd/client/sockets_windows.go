@@ -1,4 +1,4 @@
-package sockets
+package client
 
 import (
 	"context"
@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/Microsoft/go-winio"
+	"github.com/pkg/errors"
 )
 
 func configureUnixTransport(tr *http.Transport, proto, addr string) error {
-	return ErrProtocolNotAvailable
+	return errors.New("protocol not available")
 }
 
 func configureNpipeTransport(tr *http.Transport, proto, addr string) error {

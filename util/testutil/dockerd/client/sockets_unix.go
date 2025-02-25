@@ -1,6 +1,6 @@
 //go:build !windows
 
-package sockets
+package client
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const maxUnixSocketPathSize = len(syscall.RawSockaddrUnix{}.Path)
@@ -29,7 +31,7 @@ func configureUnixTransport(tr *http.Transport, proto, addr string) error {
 }
 
 func configureNpipeTransport(tr *http.Transport, proto, addr string) error {
-	return ErrProtocolNotAvailable
+	return errors.New("protocol not available")
 }
 
 // DialPipe connects to a Windows named pipe.

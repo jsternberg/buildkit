@@ -33,7 +33,6 @@ type Client interface {
 	BuildOpts() BuildOpts
 	Inputs(ctx context.Context) (map[string]llb.State, error)
 	NewContainer(ctx context.Context, req NewContainerRequest) (Container, error)
-	MountReference(ctx context.Context, ref string) (MountReference, error)
 	Warn(ctx context.Context, dgst digest.Digest, msg string, opts WarnOpts) error
 }
 

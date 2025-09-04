@@ -40,6 +40,10 @@ const frontendPrefix = "BUILDKIT_FRONTEND_OPT_"
 type GrpcClient interface {
 	client.Client
 	Run(context.Context, client.BuildFunc) error
+
+	// MountReference will take the result ID and return a MountReference
+	// that can be used to retrieve filesystem contents.
+	MountReference(resultID string) (client.MountReference, error)
 }
 
 func New(ctx context.Context, opts map[string]string, session, product string, c pb.LLBBridgeClient, w []client.WorkerInfo) (GrpcClient, error) {
@@ -863,10 +867,10 @@ func (w *msgWriter) Write(msg []byte) (int, error) {
 	return len(msg), nil
 }
 
-func (c *grpcClient) MountReference(ctx context.Context, ref string) (client.MountReference, error) {
+func (c *grpcClient) MountReference(resultID string) (client.MountReference, error) {
 	return &mountReference{
 		c:  c,
-		id: ref,
+		id: resultID,
 	}, nil
 }
 

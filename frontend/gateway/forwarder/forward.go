@@ -229,15 +229,6 @@ func (c *BridgeClient) discard(err error) {
 	}
 }
 
-func (c *BridgeClient) MountReference(ctx context.Context, ref string) (client.MountReference, error) {
-	// workerRef, ok := c.workerRefByID[ref]
-	// if !ok {
-	// 	return nil, errors.Errorf("failed to find ref %s", ref)
-	// }
-	// return workerRef, nil
-	return nil, errors.New("implement me")
-}
-
 func (c *BridgeClient) Warn(ctx context.Context, dgst digest.Digest, msg string, opts client.WarnOpts) error {
 	return c.FrontendLLBBridge.Warn(ctx, dgst, msg, opts)
 }

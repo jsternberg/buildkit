@@ -863,6 +863,13 @@ func (w *msgWriter) Write(msg []byte) (int, error) {
 	return len(msg), nil
 }
 
+func (c *grpcClient) MountReference(ctx context.Context, ref string) (client.MountReference, error) {
+	return &mountReference{
+		c:  c,
+		id: ref,
+	}, nil
+}
+
 func (c *grpcClient) NewContainer(ctx context.Context, req client.NewContainerRequest) (client.Container, error) {
 	err := c.caps.Supports(pb.CapGatewayExec)
 	if err != nil {

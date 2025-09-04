@@ -40,10 +40,6 @@ const frontendPrefix = "BUILDKIT_FRONTEND_OPT_"
 type GrpcClient interface {
 	client.Client
 	Run(context.Context, client.BuildFunc) error
-
-	// MountReference will take the result ID and return a MountReference
-	// that can be used to retrieve filesystem contents.
-	MountReference(resultID string) (client.MountReference, error)
 }
 
 func New(ctx context.Context, opts map[string]string, session, product string, c pb.LLBBridgeClient, w []client.WorkerInfo) (GrpcClient, error) {
@@ -296,6 +292,8 @@ func defaultLLBCaps() []*apicaps.PBCap {
 		{ID: string(opspb.CapMetaExportCache), Enabled: true},
 	}
 }
+
+var _ client.MountReferenceClient = (*grpcClient)(nil)
 
 type grpcClient struct {
 	client    pb.LLBBridgeClient

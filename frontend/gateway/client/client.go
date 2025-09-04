@@ -36,6 +36,15 @@ type Client interface {
 	Warn(ctx context.Context, dgst digest.Digest, msg string, opts WarnOpts) error
 }
 
+// MountReferenceClient is a Client that can also retrieve a MountReference using
+// a resultID. If a Client has this capability, it will implement this interface.
+// Not all clients have this capability.
+type MountReferenceClient interface {
+	// MountReference will take the result ID and return a MountReference
+	// that can be used to retrieve filesystem contents.
+	MountReference(resultID string) (MountReference, error)
+}
+
 // NewContainerRequest encapsulates the requirements for a client to define a
 // new container, without defining the initial process.
 type NewContainerRequest struct {

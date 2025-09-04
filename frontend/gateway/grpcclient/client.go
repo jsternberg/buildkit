@@ -865,11 +865,11 @@ func (w *msgWriter) Write(msg []byte) (int, error) {
 	return len(msg), nil
 }
 
-func (c *grpcClient) MountReference(resultID string) (client.MountReference, error) {
+func (c *grpcClient) MountReference(resultID string) client.MountReference {
 	return &mountReference{
 		c:  c,
 		id: resultID,
-	}, nil
+	}
 }
 
 func (c *grpcClient) NewContainer(ctx context.Context, req client.NewContainerRequest) (client.Container, error) {

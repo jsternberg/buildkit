@@ -42,7 +42,7 @@ type Client interface {
 type MountReferenceClient interface {
 	// MountReference will take the result ID and return a MountReference
 	// that can be used to retrieve filesystem contents.
-	MountReference(resultID string) (MountReference, error)
+	MountReference(resultID string) MountReference
 }
 
 // NewContainerRequest encapsulates the requirements for a client to define a

@@ -33,6 +33,7 @@ type Client interface {
 	BuildOpts() BuildOpts
 	Inputs(ctx context.Context) (map[string]llb.State, error)
 	NewContainer(ctx context.Context, req NewContainerRequest) (Container, error)
+	MountReference(ctx context.Context, ref string) (MountReference, error)
 	Warn(ctx context.Context, dgst digest.Digest, msg string, opts WarnOpts) error
 }
 
@@ -101,6 +102,10 @@ type ContainerProcess interface {
 type Reference interface {
 	ToState() (llb.State, error)
 	Evaluate(ctx context.Context) error
+	MountReference
+}
+
+type MountReference interface {
 	ReadFile(ctx context.Context, req ReadRequest) ([]byte, error)
 	StatFile(ctx context.Context, req StatRequest) (*fstypes.Stat, error)
 	ReadDir(ctx context.Context, req ReadDirRequest) ([]*fstypes.Stat, error)

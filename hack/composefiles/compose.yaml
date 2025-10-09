@@ -65,10 +65,21 @@ services:
     profiles:
       - metrics
 
+  minio:
+    image: quay.io/minio/minio:latest
+    ports:
+      - 127.0.0.1:9090:9090
+    command: minio server /data --console-address :9090
+    volumes:
+      - minio:/data
+    profiles:
+      - remotecache
+
 volumes:
   buildkit:
   prometheus:
   grafana:
+  minio:
 
 configs:
   buildkit_config:

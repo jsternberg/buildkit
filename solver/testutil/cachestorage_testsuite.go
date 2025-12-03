@@ -2,8 +2,10 @@ package testutil
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,12 +63,9 @@ func testResults(t *testing.T, st solver.CacheKeyStorage) {
 	})
 	require.NoError(t, err)
 
-	m := map[string]solver.CacheResult{}
-	err = st.WalkResults("foo", func(r solver.CacheResult) error {
-		m[r.ID] = r
-		return nil
-	})
-	require.NoError(t, err)
+	cur := st.Cursor()
+	m := maps.Collect(cur.ResultsByID("foo"))
+	require.NoError(t, cur.Err())
 
 	require.Equal(t, 2, len(m))
 	f0, ok := m["foo0"]
@@ -75,23 +74,17 @@ func testResults(t *testing.T, st solver.CacheKeyStorage) {
 	require.True(t, ok)
 	require.True(t, f0.CreatedAt.Before(f1.CreatedAt), "f0.CreatedAt %v was not Before f1.CreatedAt %v", f0.CreatedAt, f1.CreatedAt)
 
-	m = map[string]solver.CacheResult{}
-	err = st.WalkResults("bar", func(r solver.CacheResult) error {
-		m[r.ID] = r
-		return nil
-	})
-	require.NoError(t, err)
+	m = maps.Collect(cur.ResultsByID("bar"))
+	require.NoError(t, cur.Err())
 
 	require.Equal(t, 1, len(m))
 	_, ok = m["bar0"]
 	require.True(t, ok)
 
 	// empty result
-	err = st.WalkResults("baz", func(r solver.CacheResult) error {
-		require.Fail(t, "unreachable")
-		return nil
-	})
-	require.NoError(t, err)
+	results := maps.Collect(cur.ResultsByID("baz"))
+	require.Empty(t, results)
+	require.NoError(t, cur.Err())
 
 	res, err := st.Load("foo", "foo1")
 	require.NoError(t, err)
@@ -189,31 +182,23 @@ func testResultReleaseSingleLevel(t *testing.T, st solver.CacheKeyStorage) {
 	err = st.Release("foo0")
 	require.NoError(t, err)
 
-	m := map[string]struct{}{}
-	st.WalkResults("foo", func(res solver.CacheResult) error {
-		m[res.ID] = struct{}{}
-		return nil
-	})
+	cur := st.Cursor()
+	m := maps.Collect(cur.ResultsByID("foo"))
 
 	require.Equal(t, 1, len(m))
-	_, ok := m["foo1"]
-	require.True(t, ok)
+	require.Contains(t, m, "foo1")
+	require.NoError(t, cur.Err())
 
 	err = st.Release("foo1")
 	require.NoError(t, err)
 
-	m = map[string]struct{}{}
-	st.WalkResults("foo", func(res solver.CacheResult) error {
-		m[res.ID] = struct{}{}
-		return nil
-	})
-
+	m = maps.Collect(cur.ResultsByID("foo"))
 	require.Equal(t, 0, len(m))
+	require.NoError(t, cur.Err())
 
-	st.Walk(func(id string) error {
-		require.Fail(t, fmt.Sprintf("id %s should have been released", id))
-		return nil
-	})
+	ids := slices.Collect(cur.All())
+	require.Empty(t, ids, "all ids should have been released")
+	require.NoError(t, cur.Err())
 }
 
 func testBacklinks(t *testing.T, st solver.CacheKeyStorage) {
@@ -283,16 +268,15 @@ func testResultReleaseMultiLevel(t *testing.T, st solver.CacheKeyStorage) {
 	err = st.Release("sub0-result")
 	require.NoError(t, err)
 
+	cur := st.Cursor()
 	m := map[string]struct{}{}
-	err = st.WalkResults("foo", func(res solver.CacheResult) error {
-		m[res.ID] = struct{}{}
-		return nil
-	})
-	require.NoError(t, err)
+	for res := range cur.ResultsByID("foo") {
+		m[res] = struct{}{}
+	}
+	require.NoError(t, cur.Err())
 
 	require.Equal(t, 1, len(m))
-	_, ok := m["foo-result"]
-	require.True(t, ok)
+	require.Contains(t, m, "foo-result")
 
 	require.False(t, st.Exists("sub0"))
 
@@ -303,9 +287,7 @@ func testResultReleaseMultiLevel(t *testing.T, st solver.CacheKeyStorage) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(m))
-
-	_, ok = m["sub1"]
-	require.True(t, ok)
+	require.Contains(t, m, "sub1")
 
 	// release foo removes the result but doesn't break the chain
 
@@ -315,11 +297,10 @@ func testResultReleaseMultiLevel(t *testing.T, st solver.CacheKeyStorage) {
 	require.True(t, st.Exists("foo"))
 
 	m = map[string]struct{}{}
-	err = st.WalkResults("foo", func(res solver.CacheResult) error {
-		m[res.ID] = struct{}{}
-		return nil
-	})
-	require.NoError(t, err)
+	for res := range cur.ResultsByID("foo") {
+		m[res] = struct{}{}
+	}
+	require.NoError(t, cur.Err())
 
 	require.Equal(t, 0, len(m))
 
@@ -338,10 +319,9 @@ func testResultReleaseMultiLevel(t *testing.T, st solver.CacheKeyStorage) {
 	require.False(t, st.Exists("sub1"))
 	require.False(t, st.Exists("foo"))
 
-	st.Walk(func(id string) error {
-		require.Fail(t, fmt.Sprintf("id %s should have been released", id))
-		return nil
-	})
+	ids := slices.Collect(cur.All())
+	require.Empty(t, ids, "all ids should have been released")
+	require.NoError(t, cur.Err())
 }
 
 func testWalkIDsByResult(t *testing.T, st solver.CacheKeyStorage) {

@@ -44,18 +44,20 @@ type cacheManager struct {
 
 func (c *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
 	visited := map[string]struct{}{}
-	return c.backend.Walk(func(id string) error {
-		return c.backend.WalkResults(id, func(cr CacheResult) error {
+
+	cur := c.backend.Cursor()
+	for id := range cur.All() {
+		for _, cr := range cur.ResultsByID(id) {
 			if _, ok := visited[cr.ID]; ok {
-				return nil
+				continue
 			}
 			visited[cr.ID] = struct{}{}
 			if !c.results.Exists(ctx, cr.ID) {
 				c.backend.Release(cr.ID)
 			}
-			return nil
-		})
-	})
+		}
+	}
+	return cur.Err()
 }
 
 func (c *cacheManager) ID() string {
@@ -156,7 +158,9 @@ func (c *cacheManager) Records(ctx context.Context, ck *CacheKey) (rrecs []*Cach
 	}()
 
 	outs := make([]*CacheRecord, 0)
-	if err := c.backend.WalkResults(c.getID(ck), func(r CacheResult) error {
+
+	cur := c.backend.Cursor()
+	for _, r := range cur.ResultsByID(c.getID(ck)) {
 		if c.results.Exists(ctx, r.ID) {
 			outs = append(outs, &CacheRecord{
 				ID:           r.ID,
@@ -167,11 +171,8 @@ func (c *cacheManager) Records(ctx context.Context, ck *CacheKey) (rrecs []*Cach
 		} else {
 			c.backend.Release(r.ID)
 		}
-		return nil
-	}); err != nil {
-		return nil, err
 	}
-	return outs, nil
+	return outs, cur.Err()
 }
 
 func (c *cacheManager) Load(ctx context.Context, rec *CacheRecord) (rres Result, rerr error) {
@@ -220,9 +221,10 @@ func (c *cacheManager) filterResults(m map[string]Result, ck *CacheKey, visited 
 		return nil, nil
 	}
 	visited[id] = struct{}{}
-	if err := c.backend.WalkResults(id, func(cr CacheResult) error {
-		res, ok := m[id]
-		if ok {
+
+	cur := c.backend.Cursor()
+	for _, cr := range cur.ResultsByID(id) {
+		if res, ok := m[id]; ok {
 			results = append(results, LoadedResult{
 				Result:      res,
 				CacheKey:    ck,
@@ -230,12 +232,16 @@ func (c *cacheManager) filterResults(m map[string]Result, ck *CacheKey, visited 
 			})
 			delete(m, id)
 		}
-		return nil
-	}); err != nil {
-		for _, r := range results {
-			r.Result.Release(context.TODO())
-		}
 	}
+
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+
+	for _, r := range results {
+		r.Result.Release(context.TODO())
+	}
+
 	for _, keys := range ck.Deps() {
 		for _, key := range keys {
 			res, err := c.filterResults(m, key.CacheKey.CacheKey, visited)

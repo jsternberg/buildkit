@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"iter"
 	"time"
 
 	"github.com/moby/buildkit/session"
@@ -14,10 +15,9 @@ var ErrNotFound = errors.Errorf("not found")
 
 // CacheKeyStorage is interface for persisting cache metadata
 type CacheKeyStorage interface {
-	Exists(id string) bool
-	Walk(fn func(id string) error) error
+	Cursor() CacheKeyStorageCursor
 
-	WalkResults(id string, fn func(CacheResult) error) error
+	Exists(id string) bool
 	Load(id string, resultID string) (CacheResult, error)
 	AddResult(id string, res CacheResult) error
 	Release(resultID string) error
@@ -27,6 +27,13 @@ type CacheKeyStorage interface {
 	WalkLinks(id string, link CacheInfoLink, fn func(id string) error) error
 	HasLink(id string, link CacheInfoLink, target string) bool
 	WalkBacklinks(id string, fn func(id string, link CacheInfoLink) error) error
+}
+
+type CacheKeyStorageCursor interface {
+	All() iter.Seq[string]
+	ResultsByID(id string) iter.Seq2[string, CacheResult]
+
+	Err() error
 }
 
 // CacheResult is a record for a single solve result

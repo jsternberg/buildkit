@@ -42,12 +42,14 @@ func Records(ctx context.Context, store solver.CacheKeyStorage) ([]*Record, erro
 	}
 
 	roots := []string{}
-	if err := store.Walk(func(id string) error {
+	cur := store.Cursor()
+	for id := range cur.All() {
 		if strings.HasPrefix(string(id), "random:") || strings.HasPrefix(string(id), "sha256:") {
 			roots = append(roots, id)
 		}
-		return nil
-	}); err != nil {
+	}
+
+	if err := cur.Err(); err != nil {
 		return nil, errors.Wrap(err, "failed to walk cache keys")
 	}
 

@@ -2,6 +2,8 @@ package cacheimport
 
 import (
 	"context"
+	"iter"
+	"maps"
 	"slices"
 	"time"
 
@@ -116,46 +118,18 @@ func (cs *cacheKeyStorage) Exists(id string) bool {
 	return ok
 }
 
-func (cs *cacheKeyStorage) Walk(cb func(id string) error) error {
-	for id := range cs.byID {
-		if err := cb(id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (cs *cacheKeyStorage) WalkResults(id string, fn func(solver.CacheResult) error) error {
-	it, ok := cs.byID[id]
-	if !ok {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	for _, res := range it.results {
-		id := remoteID(res.Result)
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		if err := fn(solver.CacheResult{ID: id, CreatedAt: res.CreatedAt}); err != nil {
-			return err
-		}
-		seen[id] = struct{}{}
-	}
-	return nil
-}
-
 func (cs *cacheKeyStorage) Load(id string, resultID string) (solver.CacheResult, error) {
-	var res solver.CacheResult
-	if err := cs.WalkResults(id, func(r solver.CacheResult) error {
+	cur := cs.Cursor()
+	for _, r := range cur.ResultsByID(id) {
 		if r.ID == resultID {
-			res = r
-			return nil
+			return r, nil
 		}
-		return nil
-	}); err != nil {
+	}
+
+	if err := cur.Err(); err != nil {
 		return solver.CacheResult{}, errors.Wrapf(err, "failed to load cache result for %s", id)
 	}
-	return res, nil
+	return solver.CacheResult{}, nil
 }
 
 func (cs *cacheKeyStorage) AddResult(id string, res solver.CacheResult) error {
@@ -165,6 +139,7 @@ func (cs *cacheKeyStorage) AddResult(id string, res solver.CacheResult) error {
 func (cs *cacheKeyStorage) Release(resultID string) error {
 	return nil
 }
+
 func (cs *cacheKeyStorage) AddLink(id string, link solver.CacheInfoLink, target string) error {
 	return nil
 }
@@ -241,11 +216,52 @@ func (cs *cacheKeyStorage) HasLink(id string, link solver.CacheInfoLink, target 
 		selector: link.Selector.String(),
 	}
 	if it, ok := cs.byID[id]; ok {
-		if slices.Contains(it.links[l], target) {
-			return true
-		}
+		return slices.Contains(it.links[l], target)
 	}
 	return false
+}
+
+func (cs *cacheKeyStorage) Cursor() solver.CacheKeyStorageCursor {
+	return &cacheKeyStorageCursor{cs}
+}
+
+type cacheKeyStorageCursor struct {
+	cs *cacheKeyStorage
+}
+
+func (cs *cacheKeyStorageCursor) All() iter.Seq[string] {
+	return maps.Keys(cs.cs.byID)
+}
+
+func (cs *cacheKeyStorageCursor) ResultsByID(id string) iter.Seq2[string, solver.CacheResult] {
+	it, ok := cs.cs.byID[id]
+	if !ok {
+		return nil
+	}
+
+	return func(yield func(string, solver.CacheResult) bool) {
+		seen := map[string]struct{}{}
+		for _, res := range it.results {
+			id := remoteID(res.Result)
+			if _, ok := seen[id]; ok {
+				continue
+			}
+
+			cacheResult := solver.CacheResult{ID: id, CreatedAt: res.CreatedAt}
+			if !yield(id, cacheResult) {
+				return
+			}
+			seen[id] = struct{}{}
+		}
+	}
+}
+
+func (cs *cacheKeyStorageCursor) Err() error {
+	return nil
+}
+
+func (cs *cacheKeyStorageCursor) Close() error {
+	return nil
 }
 
 type cacheResultStorage struct {

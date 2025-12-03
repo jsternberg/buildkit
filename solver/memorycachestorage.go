@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"iter"
 	"sync"
 	"time"
 
@@ -48,42 +49,8 @@ func newInMemoryKey(id string) *inMemoryKey {
 	}
 }
 
-func (s *inMemoryStore) Walk(fn func(string) error) error {
-	s.mu.RLock()
-	ids := make([]string, 0, len(s.byID))
-	for id := range s.byID {
-		ids = append(ids, id)
-	}
-	s.mu.RUnlock()
-
-	for _, id := range ids {
-		if err := fn(id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *inMemoryStore) WalkResults(id string, fn func(CacheResult) error) error {
-	s.mu.RLock()
-
-	k, ok := s.byID[id]
-	if !ok {
-		s.mu.RUnlock()
-		return nil
-	}
-	copy := make([]CacheResult, 0, len(k.results))
-	for _, res := range k.results {
-		copy = append(copy, res)
-	}
-	s.mu.RUnlock()
-
-	for _, res := range copy {
-		if err := fn(res); err != nil {
-			return err
-		}
-	}
-	return nil
+func (s *inMemoryStore) Cursor() CacheKeyStorageCursor {
+	return &inMemoryStoreCursor{s}
 }
 
 func (s *inMemoryStore) Load(id string, resultID string) (CacheResult, error) {
@@ -275,6 +242,58 @@ func (s *inMemoryStore) WalkBacklinks(id string, fn func(id string, link CacheIn
 			return err
 		}
 	}
+	return nil
+}
+
+type inMemoryStoreCursor struct {
+	s *inMemoryStore
+}
+
+func (s *inMemoryStoreCursor) All() iter.Seq[string] {
+	s.s.mu.RLock()
+	ids := make([]string, 0, len(s.s.byID))
+	for id := range s.s.byID {
+		ids = append(ids, id)
+	}
+	s.s.mu.RUnlock()
+
+	return func(yield func(string) bool) {
+		for _, id := range ids {
+			if !yield(id) {
+				return
+			}
+		}
+	}
+}
+
+func (s *inMemoryStoreCursor) ResultsByID(id string) iter.Seq2[string, CacheResult] {
+	s.s.mu.RLock()
+
+	k, ok := s.s.byID[id]
+	if !ok {
+		s.s.mu.RUnlock()
+		return nil
+	}
+	cpy := make([]CacheResult, 0, len(k.results))
+	for _, res := range k.results {
+		cpy = append(cpy, res)
+	}
+	s.s.mu.RUnlock()
+
+	return func(yield func(string, CacheResult) bool) {
+		for _, res := range cpy {
+			if !yield(res.ID, res) {
+				return
+			}
+		}
+	}
+}
+
+func (s *inMemoryStoreCursor) Err() error {
+	return nil
+}
+
+func (s *inMemoryStoreCursor) Close() error {
 	return nil
 }
 

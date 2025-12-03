@@ -3,7 +3,9 @@ package bboltcachestorage
 import (
 	"bytes"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"iter"
 
 	"github.com/moby/buildkit/solver"
 	"github.com/moby/buildkit/util/db"
@@ -25,7 +27,7 @@ type Store struct {
 }
 
 func NewStore(dbPath string) (*Store, error) {
-	db, err := boltutil.SafeOpen(dbPath, 0600, &bolt.Options{
+	db, err := boltutil.SafeOpen(dbPath, 0o600, &bolt.Options{
 		NoSync: true,
 	})
 	if err != nil {
@@ -63,57 +65,8 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *Store) Walk(fn func(id string) error) error {
-	ids := make([]string, 0)
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(linksBucket))
-		c := b.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			if v == nil {
-				ids = append(ids, string(k))
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if err := fn(id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Store) WalkResults(id string, fn func(solver.CacheResult) error) error {
-	var list []solver.CacheResult
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(resultBucket))
-		if b == nil {
-			return nil
-		}
-		b = b.Bucket([]byte(id))
-		if b == nil {
-			return nil
-		}
-
-		return b.ForEach(func(k, v []byte) error {
-			var res solver.CacheResult
-			if err := json.Unmarshal(v, &res); err != nil {
-				return err
-			}
-			list = append(list, res)
-			return nil
-		})
-	}); err != nil {
-		return err
-	}
-	for _, res := range list {
-		if err := fn(res); err != nil {
-			return err
-		}
-	}
-	return nil
+func (s *Store) Cursor() solver.CacheKeyStorageCursor {
+	return &storeCursor{db: s.db}
 }
 
 func (s *Store) Load(id string, resultID string) (solver.CacheResult, error) {
@@ -504,6 +457,81 @@ func (s *Store) WalkBacklinks(id string, fn func(id string, link solver.CacheInf
 			return err
 		}
 	}
+	return nil
+}
+
+type storeCursor struct {
+	db   db.DB
+	errs []error
+}
+
+func (s *storeCursor) All() iter.Seq[string] {
+	ids := make([]string, 0)
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(linksBucket))
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if v == nil {
+				ids = append(ids, string(k))
+			}
+		}
+		return nil
+	}); err != nil {
+		s.errs = append(s.errs, err)
+	}
+
+	return func(yield func(string) bool) {
+		for _, id := range ids {
+			if !yield(id) {
+				return
+			}
+		}
+	}
+}
+
+func (s *storeCursor) ResultsByID(id string) iter.Seq2[string, solver.CacheResult] {
+	var list []solver.CacheResult
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(resultBucket))
+		if b == nil {
+			return nil
+		}
+		b = b.Bucket([]byte(id))
+		if b == nil {
+			return nil
+		}
+
+		return b.ForEach(func(k, v []byte) error {
+			var res solver.CacheResult
+			if err := json.Unmarshal(v, &res); err != nil {
+				return err
+			}
+			list = append(list, res)
+			return nil
+		})
+	}); err != nil {
+		s.errs = append(s.errs, err)
+	}
+
+	return func(yield func(string, solver.CacheResult) bool) {
+		for _, res := range list {
+			if !yield(res.ID, res) {
+				return
+			}
+		}
+	}
+}
+
+func (s *storeCursor) Err() error {
+	if len(s.errs) > 1 {
+		return stderrors.Join(s.errs...)
+	} else if len(s.errs) == 1 {
+		return s.errs[0]
+	}
+	return nil
+}
+
+func (s *storeCursor) Close() error {
 	return nil
 }
 

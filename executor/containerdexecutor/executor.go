@@ -162,7 +162,7 @@ func (w *containerdExecutor) Run(ctx context.Context, id string, g session.Group
 		return nil, err
 	}
 
-	namespace, err := provider.New(ctx, meta.Hostname)
+	namespace, err := provider.New(ctx, meta.Hostname, g)
 	if err != nil {
 		return nil, err
 	}

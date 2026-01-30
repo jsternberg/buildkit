@@ -12,6 +12,7 @@ import (
 	"github.com/gofrs/flock"
 	resourcestypes "github.com/moby/buildkit/executor/resources/types"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/network"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -91,7 +92,7 @@ func (c *cniProvider) initNetwork(lock bool) error {
 		}
 		defer unlock()
 	}
-	ns, err := c.New(context.TODO(), "")
+	ns, err := c.New(context.TODO(), "", nil)
 	if err != nil {
 		return err
 	}
@@ -238,7 +239,7 @@ func (pool *cniPool) cleanupToTargetSize() {
 	}
 }
 
-func (c *cniProvider) New(ctx context.Context, hostname string) (network.Namespace, error) {
+func (c *cniProvider) New(ctx context.Context, hostname string, _ session.Group) (network.Namespace, error) {
 	// We can't use the pool for namespaces that need a custom hostname.
 	// We also avoid using it on windows because we don't have a cleanup
 	// mechanism for Windows yet.

@@ -181,7 +181,7 @@ func (w *runcExecutor) Run(ctx context.Context, id string, g session.Group, root
 	if !ok {
 		return nil, errors.Errorf("unknown network mode %s", meta.NetMode)
 	}
-	namespace, err := provider.New(ctx, meta.Hostname)
+	namespace, err := provider.New(ctx, meta.Hostname, g)
 	if err != nil {
 		return nil, err
 	}

@@ -10,12 +10,14 @@ const (
 	NetworkDefault NetworkMode = "default"
 	NetworkNone    NetworkMode = "none"
 	NetworkHost    NetworkMode = "host"
+	NetworkSession NetworkMode = "session"
 )
 
 var allowedNetwork = map[NetworkMode]struct{}{
 	NetworkDefault: {},
 	NetworkNone:    {},
 	NetworkHost:    {},
+	NetworkSession: {},
 }
 
 func isValidNetwork(value string) bool {

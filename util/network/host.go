@@ -7,6 +7,7 @@ import (
 
 	"github.com/containerd/containerd/v2/pkg/oci"
 	resourcestypes "github.com/moby/buildkit/executor/resources/types"
+	"github.com/moby/buildkit/session"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -14,10 +15,9 @@ func NewHostProvider() Provider {
 	return &host{}
 }
 
-type host struct {
-}
+type host struct{}
 
-func (h *host) New(_ context.Context, hostname string) (Namespace, error) {
+func (h *host) New(_ context.Context, hostname string, _ session.Group) (Namespace, error) {
 	return &hostNS{}, nil
 }
 
@@ -25,8 +25,7 @@ func (h *host) Close() error {
 	return nil
 }
 
-type hostNS struct {
-}
+type hostNS struct{}
 
 func (h *hostNS) Set(s *specs.Spec) error {
 	return oci.WithHostNamespace(specs.NetworkNamespace)(nil, nil, nil, s)

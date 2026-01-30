@@ -18,6 +18,8 @@ func dispatchRunNetwork(c *instructions.RunCommand) (llb.RunOption, error) {
 		return llb.Network(pb.NetMode_NONE), nil
 	case instructions.NetworkHost:
 		return llb.Network(pb.NetMode_HOST), nil
+	case instructions.NetworkSession:
+		return llb.Network(pb.NetMode_SESSION), nil
 	default:
 		return nil, errors.Errorf("unsupported network mode %q", network)
 	}

@@ -320,6 +320,7 @@ func ociWorkerInitializer(c *cli.Context, common workerInitializerOpt) ([]worker
 			BridgeName:   common.config.Workers.OCI.BridgeName,
 			BridgeSubnet: common.config.Workers.OCI.BridgeSubnet,
 		},
+		SessionManager: common.sessionManager,
 	}
 
 	var parallelismSem *semaphore.Weighted

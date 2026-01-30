@@ -305,6 +305,7 @@ func containerdWorkerInitializer(c *cli.Context, common workerInitializerOpt) ([
 			BridgeName:   common.config.Workers.Containerd.BridgeName,
 			BridgeSubnet: common.config.Workers.Containerd.BridgeSubnet,
 		},
+		SessionManager: common.sessionManager,
 	}
 
 	var parallelismSem *semaphore.Weighted

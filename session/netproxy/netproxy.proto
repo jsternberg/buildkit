@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package moby.netproxy.v1;
+
+option go_package = "github.com/moby/buildkit/session/netproxy";
+
+service NetworkProxy {
+  rpc Dial(DialRequest) returns (DialResponse);
+  rpc Connect(stream NetworkPacket) returns (stream NetworkPacket);
+}
+
+message DialRequest {
+  Protocol protocol = 1;
+  Address addr = 2;
+  uint32 mtu = 3;
+}
+
+message DialResponse {
+  string id = 1;
+}
+
+enum Protocol {
+  TCP = 0;
+  UDP = 1;
+}
+
+message Address {
+  string addr = 1;
+  uint32 port = 2;
+}
+
+message NetworkPacket {
+  oneof msg {
+    InitMessage init = 1;
+    BytesMessage data = 2;
+  }
+}
+
+message InitMessage {
+  string id = 1;
+}
+
+message BytesMessage {
+  bytes data = 1;
+}

@@ -22,9 +22,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var mirrorOnce sync.Once
-var mirror *integration.Mirror
-var mirrorMu sync.Mutex
+var (
+	mirrorOnce sync.Once
+	mirror     *integration.Mirror
+	mirrorMu   sync.Mutex
+)
 
 func RunMirror() func() error {
 	mirrorOnce.Do(func() {
@@ -88,7 +90,7 @@ func TestWorkerExec(t *testing.T, w *base.Worker) {
 	}()
 	stdout := bytes.NewBuffer(nil)
 	stderr := bytes.NewBuffer(nil)
-	_, err = w.WorkerOpt.Executor.Run(ctxTimeout, id, execMount(root), nil, executor.ProcessInfo{
+	_, err = w.WorkerOpt.Executor.Run(ctxTimeout, id, nil, execMount(root), nil, executor.ProcessInfo{
 		Meta: executor.Meta{
 			Args: []string{"cat"},
 			Cwd:  "/",
@@ -109,7 +111,7 @@ func TestWorkerExec(t *testing.T, w *base.Worker) {
 	eg := errgroup.Group{}
 	started = make(chan struct{})
 	eg.Go(func() error {
-		_, err := w.WorkerOpt.Executor.Run(ctx, id, execMount(root), nil, executor.ProcessInfo{
+		_, err := w.WorkerOpt.Executor.Run(ctx, id, nil, execMount(root), nil, executor.ProcessInfo{
 			Meta: executor.Meta{
 				Args: []string{"sleep", "10"},
 				Cwd:  "/",
@@ -201,7 +203,7 @@ func TestWorkerExecFailures(t *testing.T, w *base.Worker) {
 	eg := errgroup.Group{}
 	started := make(chan struct{})
 	eg.Go(func() error {
-		_, err := w.WorkerOpt.Executor.Run(ctx, id, execMount(root), nil, executor.ProcessInfo{
+		_, err := w.WorkerOpt.Executor.Run(ctx, id, nil, execMount(root), nil, executor.ProcessInfo{
 			Meta: executor.Meta{
 				Args: []string{"/bin/false"},
 				Cwd:  "/",
@@ -231,7 +233,7 @@ func TestWorkerExecFailures(t *testing.T, w *base.Worker) {
 	eg = errgroup.Group{}
 	started = make(chan struct{})
 	eg.Go(func() error {
-		_, err := w.WorkerOpt.Executor.Run(ctx, id, execMount(root), nil, executor.ProcessInfo{
+		_, err := w.WorkerOpt.Executor.Run(ctx, id, nil, execMount(root), nil, executor.ProcessInfo{
 			Meta: executor.Meta{
 				Args: []string{"bogus"},
 			},
@@ -284,7 +286,7 @@ func TestWorkerCancel(t *testing.T, w *base.Worker) {
 
 	go func() {
 		defer close(pid1Done)
-		_, pid1Err = w.WorkerOpt.Executor.Run(pid1Ctx, id, execMount(root), nil, executor.ProcessInfo{
+		_, pid1Err = w.WorkerOpt.Executor.Run(pid1Ctx, id, nil, execMount(root), nil, executor.ProcessInfo{
 			Meta: executor.Meta{
 				Args: []string{"/bin/sleep", "10"},
 				Cwd:  "/",

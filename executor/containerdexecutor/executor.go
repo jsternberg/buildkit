@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/util/bklog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -112,7 +113,7 @@ type containerState struct {
 	rootMounts []mount.Mount
 }
 
-func (w *containerdExecutor) Run(ctx context.Context, id string, root executor.Mount, mounts []executor.Mount, process executor.ProcessInfo, started chan<- struct{}) (rec resourcestypes.Recorder, err error) {
+func (w *containerdExecutor) Run(ctx context.Context, id string, g session.Group, root executor.Mount, mounts []executor.Mount, process executor.ProcessInfo, started chan<- struct{}) (rec resourcestypes.Recorder, err error) {
 	if id == "" {
 		id = identity.NewID()
 	}

@@ -182,7 +182,7 @@ func (b *llbBridge) validateEntitlements(p executor.ProcessInfo) error {
 	return ent.Check(v)
 }
 
-func (b *llbBridge) Run(ctx context.Context, id string, rootfs executor.Mount, mounts []executor.Mount, process executor.ProcessInfo, started chan<- struct{}) (resourcestypes.Recorder, error) {
+func (b *llbBridge) Run(ctx context.Context, id string, g session.Group, rootfs executor.Mount, mounts []executor.Mount, process executor.ProcessInfo, started chan<- struct{}) (resourcestypes.Recorder, error) {
 	if err := b.validateEntitlements(process); err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (b *llbBridge) Run(ctx context.Context, id string, rootfs executor.Mount, m
 	if err := b.loadExecutor(); err != nil {
 		return nil, err
 	}
-	return b.executor.Run(ctx, id, rootfs, mounts, process, started)
+	return b.executor.Run(ctx, id, g, rootfs, mounts, process, started)
 }
 
 func (b *llbBridge) Exec(ctx context.Context, id string, process executor.ProcessInfo) error {

@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/util/bklog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -152,7 +153,7 @@ func New(opt Opt, networkProviders map[pb.NetMode]network.Provider) (executor.Ex
 	return w, nil
 }
 
-func (w *runcExecutor) Run(ctx context.Context, id string, root executor.Mount, mounts []executor.Mount, process executor.ProcessInfo, started chan<- struct{}) (rec resourcestypes.Recorder, err error) {
+func (w *runcExecutor) Run(ctx context.Context, id string, g session.Group, root executor.Mount, mounts []executor.Mount, process executor.ProcessInfo, started chan<- struct{}) (rec resourcestypes.Recorder, err error) {
 	startedOnce := sync.Once{}
 	done := make(chan error, 1)
 	w.mu.Lock()

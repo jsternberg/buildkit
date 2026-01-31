@@ -1,6 +1,6 @@
 module github.com/moby/buildkit
 
-go 1.25.0
+go 1.25.5
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
@@ -111,6 +111,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251103181224-f26f9409b101
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.11
+	gvisor.dev/gvisor v0.0.0-20260130012333-5c79e3901d0a
 	kernel.org/pub/linux/libs/security/libcap/cap v1.2.77
 	tags.cncf.io/container-device-interface v1.1.0
 )
@@ -184,6 +185,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
+	github.com/google/btree v1.1.3 // indirect
 	github.com/google/certificate-transparency-go v1.3.2 // indirect
 	github.com/google/go-containerregistry v0.20.6 // indirect
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect

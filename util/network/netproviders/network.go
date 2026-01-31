@@ -76,7 +76,7 @@ func Providers(opt Opt) (providers map[pb.NetMode]network.Provider, resolvedMode
 	}
 
 	if opt.SessionManager != nil {
-		providers[pb.NetMode_SESSION] = sessionprovider.NewSessionProvider(opt.SessionManager)
+		providers[pb.NetMode_SESSION] = sessionprovider.New(opt.SessionManager)
 	}
 
 	return providers, resolvedMode, nil

@@ -2,18 +2,20 @@ package sessionprovider
 
 import (
 	"context"
+	"io"
+	"net/netip"
 
+	"github.com/containerd/containerd/v2/pkg/oci"
 	resourcestypes "github.com/moby/buildkit/executor/resources/types"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/netproxy"
 	"github.com/moby/buildkit/util/network"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
-	"gvisor.dev/gvisor/pkg/tcpip/link/fdbased"
-	"gvisor.dev/gvisor/pkg/rawfile"
-	"gvisor.dev/gvisor/pkg/tcpip/link/tun"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
@@ -22,64 +24,94 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
-func New(sm *session.Manager) network.Provider {
-	return nil
+type Opt struct {
+	Root           string
+	SessionManager *session.Manager
+}
+
+func New(opt Opt) network.Provider {
+	addr := netip.MustParseAddr("192.168.1.2")
+	return &sessionProvider{
+		root: opt.Root,
+		addr: addr,
+		sm:   opt.SessionManager,
+	}
 }
 
 type sessionProvider struct {
-	sm *session.Manager
+	root string
+	addr netip.Addr
+	sm   *session.Manager
 }
 
-func (s *sessionProvider) New(_ context.Context, hostname string, g session.Group) (network.Namespace, error) {
+func (s *sessionProvider) New(ctx context.Context, hostname string, g session.Group) (network.Namespace, error) {
 	if g == nil {
 		return nil, errors.New("no session provided")
 	}
-	return nil, nil
+
+	var caller session.Caller
+	if err := s.sm.Any(ctx, g, func(ctx context.Context, s string, c session.Caller) error {
+		caller = c
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return s.newSessionNS(hostname, caller)
+}
+
+func (s *sessionProvider) newSessionNS(hostname string, caller session.Caller) (_ *sessionNS, retErr error) {
+	ep, nsPath, err := createNetNS(s, hostname)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if retErr != nil {
+			deleteNetNS(nsPath)
+		}
+	}()
+
+	client := netproxy.NewNetworkProxyClient(caller.Conn())
+	stack, tcpErr := newNetworkStack(netip.Addr{}, ep, client)
+	if tcpErr != nil {
+		return nil, errors.Errorf("network stack creation error: %s", tcpErr)
+	}
+
+	return &sessionNS{
+		ep:     ep,
+		nsPath: nsPath,
+		stack:  stack,
+	}, nil
 }
 
 func (s *sessionProvider) Close() error {
 	return nil
 }
 
-type sessionNS struct{}
+type sessionNS struct {
+	ep     stack.LinkEndpoint
+	nsPath string
+	stack  *stack.Stack
+}
 
 func (s *sessionNS) Set(spec *specs.Spec) error {
-	return nil
+	return oci.WithLinuxNamespace(specs.LinuxNamespace{
+		Type: specs.NetworkNamespace,
+		Path: s.nsPath,
+	})(nil, nil, nil, spec)
 }
 
 func (s *sessionNS) Close() error {
-	return nil
+	s.stack.Close()
+	return deleteNetNS(s.nsPath)
 }
 
 func (s *sessionNS) Sample() (*resourcestypes.NetworkSample, error) {
 	return nil, nil
 }
 
-func openLinkEndpoint() (stack.LinkEndpoint, error) {
-	const tunName = "tun0"
-
-	// this will fail if the tunnel doesn't already exist.
-	// you can swap this with the open call and open will
-	// create the tunnel.
-	mtu, err := rawfile.GetMTU(tunName)
-	if err != nil {
-		return nil, err
-	}
-
-	// this will create the tunnel if it doesn't exist or will
-	// open the existing one.
-	fd, err := tun.Open(tunName)
-	if err != nil {
-		return nil, err
-	}
-
-	return fdbased.New(&fdbased.Options{
-		FDs: []int{fd},
-		MTU: mtu,
-	})
-}
-
-func newNetworkStack(addr netip.Address, ep stack.LinkEndpoint, client NetworkProxyClient) (*stack.Stack, error) {
+func newNetworkStack(addr netip.Addr, ep stack.LinkEndpoint, client netproxy.NetworkProxyClient) (*stack.Stack, tcpip.Error) {
 	// basic network stack creation. notice that we don't support icmp
 	// so no pinging and we only support tcp for now. I think we could feasibly
 	// use this to also support udp, but I don't view that as very important
@@ -91,7 +123,7 @@ func newNetworkStack(addr netip.Address, ep stack.LinkEndpoint, client NetworkPr
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol},
 	})
-	
+
 	forwarder := tcp.NewForwarder(s, 0, 1024, func(req *tcp.ForwarderRequest) {
 		// it's called local address and port, but it's our destination
 		// address hence the remote from our perspective.
@@ -101,7 +133,7 @@ func newNetworkStack(addr netip.Address, ep stack.LinkEndpoint, client NetworkPr
 			req.Complete(true)
 			return
 		}
-		
+
 		var wq waiter.Queue
 		ep, e := req.CreateEndpoint(&wq)
 		if e != nil {
@@ -110,38 +142,38 @@ func newNetworkStack(addr netip.Address, ep stack.LinkEndpoint, client NetworkPr
 			req.Complete(true)
 			return
 		}
-		
+
 		// nothing else fails at this point so send the complete.
 		// this is the connection to our own network stack and the remote address.
 		// it's local relative to us.
 		local := gonet.NewTCPConn(&wq, ep)
 		defer local.Close()
-		
+
 		// two goroutines. one side reads from local and writes to remote,
 		// the other reads from remote and writes to local.
 		streamConn(local, remote)
 	})
 	s.SetTransportProtocolHandler(tcp.ProtocolNumber, forwarder.HandlePacket)
-	
+
 	if err := s.CreateNIC(1, ep); err != nil {
-		return err
+		return nil, err
 	}
-	
+
 	// this allows our nic to handle ip addresses it doesn't own
 	// which allows the tcp forwarder to function correctly.
 	s.SetPromiscuousMode(1, true)
 	s.SetSpoofing(1, true)
-	
+
 	// not sure if this part is needed, but the address should match
 	// the address configured for the tunnel.
 	protocolAddr := tcpip.ProtocolAddress{
 		Protocol:          ipv4.ProtocolNumber,
-		AddressWithPrefix: addr.WithPrefix(),
+		AddressWithPrefix: tcpip.AddrFromSlice(addr.AsSlice()).WithPrefix(),
 	}
 	if err := s.AddProtocolAddress(1, protocolAddr, stack.AddressProperties{}); err != nil {
-		panic(err)
+		return nil, err
 	}
-	
+
 	// send all traffic to the link endpoint for the grpc session.
 	// likely need both ipv4 and ipv6 but I've only tested ipv4 so far.
 	s.SetRouteTable([]tcpip.Route{
@@ -149,10 +181,103 @@ func newNetworkStack(addr netip.Address, ep stack.LinkEndpoint, client NetworkPr
 			Destination: header.IPv4EmptySubnet,
 			NIC:         1,
 		},
-	}
+	})
 	return s, nil
 }
 
-// ip tuntap add name tun0 mode tun
-// ip link set tun0 up
-// ip addr add 192.168.1.2/24 dev tun0
+func dialTCP(client netproxy.NetworkProxyClient, addr tcpip.Address, port uint16) (grpc.BidiStreamingClient[netproxy.NetworkPacket, netproxy.NetworkPacket], error) {
+	ctx := context.Background()
+
+	req := &netproxy.DialRequest{
+		Protocol: netproxy.Protocol_TCP,
+		Addr: &netproxy.Address{
+			Ip:   addr.String(),
+			Port: uint32(port),
+		},
+	}
+
+	resp, err := client.Dial(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to dial")
+	}
+
+	stream, err := client.Connect(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to connect")
+	}
+
+	// Send init message with the connection ID
+	initPacket := &netproxy.NetworkPacket{
+		Packet: &netproxy.NetworkPacket_Init{
+			Init: &netproxy.InitMessage{
+				Id: resp.Id,
+			},
+		},
+	}
+
+	if err := stream.Send(initPacket); err != nil {
+		return nil, errors.Wrap(err, "failed to send init message")
+	}
+
+	return stream, nil
+}
+
+func streamConn(local *gonet.TCPConn, remote grpc.BidiStreamingClient[netproxy.NetworkPacket, netproxy.NetworkPacket]) {
+	eg, _ := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
+		defer remote.CloseSend()
+
+		// read from the local, send to the remote.
+		// todo: use the mtu from the physical tunnel
+		buf := make([]byte, 1500)
+		for {
+			n, err := local.Read(buf)
+			if err != nil {
+				return nonEOFError(err)
+			}
+
+			pkt := &netproxy.NetworkPacket{
+				Packet: &netproxy.NetworkPacket_Data{
+					Data: &netproxy.BytesMessage{
+						Data: buf[:n],
+					},
+				},
+			}
+			if err := remote.Send(pkt); err != nil {
+				return err
+			}
+		}
+	})
+
+	eg.Go(func() error {
+		// read from the remote and send to the local.
+		defer local.CloseWrite()
+
+		for {
+			pkt, err := remote.Recv()
+			if err != nil {
+				return nonEOFError(err)
+			}
+
+			if data, ok := pkt.Packet.(*netproxy.NetworkPacket_Data); ok {
+				if _, err := local.Write(data.Data.Data); err != nil {
+					return err
+				}
+			} else {
+				return errors.Errorf("unexpected packet type: %T", pkt.Packet)
+			}
+		}
+	})
+
+	if err := eg.Wait(); err != nil {
+		// todo: log a message or somehow send it back to the client or something.
+		return
+	}
+}
+
+func nonEOFError(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
+}

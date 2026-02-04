@@ -4,7 +4,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/network"
 	"github.com/moby/buildkit/util/network/cniprovider"
@@ -13,9 +12,9 @@ import (
 )
 
 type Opt struct {
-	CNI            cniprovider.Opt
-	SessionManager *session.Manager
-	Mode           string
+	CNI     cniprovider.Opt
+	Session sessionprovider.Opt
+	Mode    string
 }
 
 // Providers returns the network provider set.
@@ -67,16 +66,13 @@ func Providers(opt Opt) (providers map[pb.NetMode]network.Provider, resolvedMode
 	}
 
 	providers = map[pb.NetMode]network.Provider{
-		pb.NetMode_UNSET: defaultProvider,
-		pb.NetMode_NONE:  network.NewNoneProvider(),
+		pb.NetMode_UNSET:   defaultProvider,
+		pb.NetMode_NONE:    network.NewNoneProvider(),
+		pb.NetMode_SESSION: sessionprovider.New(opt.Session),
 	}
 
 	if hostProvider, ok := getHostProvider(); ok {
 		providers[pb.NetMode_HOST] = hostProvider
-	}
-
-	if opt.SessionManager != nil {
-		providers[pb.NetMode_SESSION] = sessionprovider.New(opt.SessionManager)
 	}
 
 	return providers, resolvedMode, nil

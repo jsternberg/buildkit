@@ -25,12 +25,12 @@ enum Protocol {
 }
 
 message Address {
-  string addr = 1;
+  string ip = 1;
   uint32 port = 2;
 }
 
 message NetworkPacket {
-  oneof msg {
+  oneof packet {
     InitMessage init = 1;
     BytesMessage data = 2;
   }

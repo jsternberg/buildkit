@@ -16,6 +16,7 @@ import (
 	"github.com/moby/buildkit/util/disk"
 	"github.com/moby/buildkit/util/network/cniprovider"
 	"github.com/moby/buildkit/util/network/netproviders"
+	"github.com/moby/buildkit/util/network/sessionprovider"
 	"github.com/moby/buildkit/worker"
 	"github.com/moby/buildkit/worker/base"
 	"github.com/moby/buildkit/worker/containerd"
@@ -305,7 +306,10 @@ func containerdWorkerInitializer(c *cli.Context, common workerInitializerOpt) ([
 			BridgeName:   common.config.Workers.Containerd.BridgeName,
 			BridgeSubnet: common.config.Workers.Containerd.BridgeSubnet,
 		},
-		SessionManager: common.sessionManager,
+		Session: sessionprovider.Opt{
+			Root:           common.config.Root,
+			SessionManager: common.sessionManager,
+		},
 	}
 
 	var parallelismSem *semaphore.Weighted

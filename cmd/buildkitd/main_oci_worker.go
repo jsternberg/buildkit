@@ -36,6 +36,7 @@ import (
 	"github.com/moby/buildkit/util/disk"
 	"github.com/moby/buildkit/util/network/cniprovider"
 	"github.com/moby/buildkit/util/network/netproviders"
+	"github.com/moby/buildkit/util/network/sessionprovider"
 	"github.com/moby/buildkit/util/resolver"
 	"github.com/moby/buildkit/worker"
 	"github.com/moby/buildkit/worker/base"
@@ -320,7 +321,10 @@ func ociWorkerInitializer(c *cli.Context, common workerInitializerOpt) ([]worker
 			BridgeName:   common.config.Workers.OCI.BridgeName,
 			BridgeSubnet: common.config.Workers.OCI.BridgeSubnet,
 		},
-		SessionManager: common.sessionManager,
+		Session: sessionprovider.Opt{
+			Root:           common.config.Root,
+			SessionManager: common.sessionManager,
+		},
 	}
 
 	var parallelismSem *semaphore.Weighted

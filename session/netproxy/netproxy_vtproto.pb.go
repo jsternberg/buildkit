@@ -60,7 +60,7 @@ func (m *Address) CloneVT() *Address {
 		return (*Address)(nil)
 	}
 	r := new(Address)
-	r.Addr = m.Addr
+	r.Ip = m.Ip
 	r.Port = m.Port
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -78,8 +78,8 @@ func (m *NetworkPacket) CloneVT() *NetworkPacket {
 		return (*NetworkPacket)(nil)
 	}
 	r := new(NetworkPacket)
-	if m.Msg != nil {
-		r.Msg = m.Msg.(interface{ CloneVT() isNetworkPacket_Msg }).CloneVT()
+	if m.Packet != nil {
+		r.Packet = m.Packet.(interface{ CloneVT() isNetworkPacket_Packet }).CloneVT()
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -92,7 +92,7 @@ func (m *NetworkPacket) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *NetworkPacket_Init) CloneVT() isNetworkPacket_Msg {
+func (m *NetworkPacket_Init) CloneVT() isNetworkPacket_Packet {
 	if m == nil {
 		return (*NetworkPacket_Init)(nil)
 	}
@@ -101,7 +101,7 @@ func (m *NetworkPacket_Init) CloneVT() isNetworkPacket_Msg {
 	return r
 }
 
-func (m *NetworkPacket_Data) CloneVT() isNetworkPacket_Msg {
+func (m *NetworkPacket_Data) CloneVT() isNetworkPacket_Packet {
 	if m == nil {
 		return (*NetworkPacket_Data)(nil)
 	}
@@ -198,7 +198,7 @@ func (this *Address) EqualVT(that *Address) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Addr != that.Addr {
+	if this.Ip != that.Ip {
 		return false
 	}
 	if this.Port != that.Port {
@@ -220,15 +220,15 @@ func (this *NetworkPacket) EqualVT(that *NetworkPacket) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Msg == nil && that.Msg != nil {
+	if this.Packet == nil && that.Packet != nil {
 		return false
-	} else if this.Msg != nil {
-		if that.Msg == nil {
+	} else if this.Packet != nil {
+		if that.Packet == nil {
 			return false
 		}
-		if !this.Msg.(interface {
-			EqualVT(isNetworkPacket_Msg) bool
-		}).EqualVT(that.Msg) {
+		if !this.Packet.(interface {
+			EqualVT(isNetworkPacket_Packet) bool
+		}).EqualVT(that.Packet) {
 			return false
 		}
 	}
@@ -242,7 +242,7 @@ func (this *NetworkPacket) EqualMessageVT(thatMsg proto.Message) bool {
 	}
 	return this.EqualVT(that)
 }
-func (this *NetworkPacket_Init) EqualVT(thatIface isNetworkPacket_Msg) bool {
+func (this *NetworkPacket_Init) EqualVT(thatIface isNetworkPacket_Packet) bool {
 	that, ok := thatIface.(*NetworkPacket_Init)
 	if !ok {
 		return false
@@ -267,7 +267,7 @@ func (this *NetworkPacket_Init) EqualVT(thatIface isNetworkPacket_Msg) bool {
 	return true
 }
 
-func (this *NetworkPacket_Data) EqualVT(thatIface isNetworkPacket_Msg) bool {
+func (this *NetworkPacket_Data) EqualVT(thatIface isNetworkPacket_Packet) bool {
 	that, ok := thatIface.(*NetworkPacket_Data)
 	if !ok {
 		return false
@@ -458,10 +458,10 @@ func (m *Address) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x10
 	}
-	if len(m.Addr) > 0 {
-		i -= len(m.Addr)
-		copy(dAtA[i:], m.Addr)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Addr)))
+	if len(m.Ip) > 0 {
+		i -= len(m.Ip)
+		copy(dAtA[i:], m.Ip)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ip)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -498,7 +498,7 @@ func (m *NetworkPacket) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if vtmsg, ok := m.Msg.(interface {
+	if vtmsg, ok := m.Packet.(interface {
 		MarshalToSizedBufferVT([]byte) (int, error)
 	}); ok {
 		size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
@@ -676,7 +676,7 @@ func (m *Address) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Addr)
+	l = len(m.Ip)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -693,7 +693,7 @@ func (m *NetworkPacket) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if vtmsg, ok := m.Msg.(interface{ SizeVT() int }); ok {
+	if vtmsg, ok := m.Packet.(interface{ SizeVT() int }); ok {
 		n += vtmsg.SizeVT()
 	}
 	n += len(m.unknownFields)
@@ -995,7 +995,7 @@ func (m *Address) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Addr", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Ip", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -1023,7 +1023,7 @@ func (m *Address) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Addr = string(dAtA[iNdEx:postIndex])
+			m.Ip = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
@@ -1124,7 +1124,7 @@ func (m *NetworkPacket) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Msg.(*NetworkPacket_Init); ok {
+			if oneof, ok := m.Packet.(*NetworkPacket_Init); ok {
 				if err := oneof.Init.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
@@ -1133,7 +1133,7 @@ func (m *NetworkPacket) UnmarshalVT(dAtA []byte) error {
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Msg = &NetworkPacket_Init{Init: v}
+				m.Packet = &NetworkPacket_Init{Init: v}
 			}
 			iNdEx = postIndex
 		case 2:
@@ -1165,7 +1165,7 @@ func (m *NetworkPacket) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Msg.(*NetworkPacket_Data); ok {
+			if oneof, ok := m.Packet.(*NetworkPacket_Data); ok {
 				if err := oneof.Data.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
@@ -1174,7 +1174,7 @@ func (m *NetworkPacket) UnmarshalVT(dAtA []byte) error {
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Msg = &NetworkPacket_Data{Data: v}
+				m.Packet = &NetworkPacket_Data{Data: v}
 			}
 			iNdEx = postIndex
 		default:

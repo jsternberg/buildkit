@@ -173,7 +173,7 @@ func (x *DialResponse) GetId() string {
 
 type Address struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Addr          string                 `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	Ip            string                 `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
 	Port          uint32                 `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -209,9 +209,9 @@ func (*Address) Descriptor() ([]byte, []int) {
 	return file_github_com_moby_buildkit_session_netproxy_netproxy_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Address) GetAddr() string {
+func (x *Address) GetIp() string {
 	if x != nil {
-		return x.Addr
+		return x.Ip
 	}
 	return ""
 }
@@ -225,11 +225,11 @@ func (x *Address) GetPort() uint32 {
 
 type NetworkPacket struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Msg:
+	// Types that are valid to be assigned to Packet:
 	//
 	//	*NetworkPacket_Init
 	//	*NetworkPacket_Data
-	Msg           isNetworkPacket_Msg `protobuf_oneof:"msg"`
+	Packet        isNetworkPacket_Packet `protobuf_oneof:"packet"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -264,16 +264,16 @@ func (*NetworkPacket) Descriptor() ([]byte, []int) {
 	return file_github_com_moby_buildkit_session_netproxy_netproxy_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *NetworkPacket) GetMsg() isNetworkPacket_Msg {
+func (x *NetworkPacket) GetPacket() isNetworkPacket_Packet {
 	if x != nil {
-		return x.Msg
+		return x.Packet
 	}
 	return nil
 }
 
 func (x *NetworkPacket) GetInit() *InitMessage {
 	if x != nil {
-		if x, ok := x.Msg.(*NetworkPacket_Init); ok {
+		if x, ok := x.Packet.(*NetworkPacket_Init); ok {
 			return x.Init
 		}
 	}
@@ -282,15 +282,15 @@ func (x *NetworkPacket) GetInit() *InitMessage {
 
 func (x *NetworkPacket) GetData() *BytesMessage {
 	if x != nil {
-		if x, ok := x.Msg.(*NetworkPacket_Data); ok {
+		if x, ok := x.Packet.(*NetworkPacket_Data); ok {
 			return x.Data
 		}
 	}
 	return nil
 }
 
-type isNetworkPacket_Msg interface {
-	isNetworkPacket_Msg()
+type isNetworkPacket_Packet interface {
+	isNetworkPacket_Packet()
 }
 
 type NetworkPacket_Init struct {
@@ -301,9 +301,9 @@ type NetworkPacket_Data struct {
 	Data *BytesMessage `protobuf:"bytes,2,opt,name=data,proto3,oneof"`
 }
 
-func (*NetworkPacket_Init) isNetworkPacket_Msg() {}
+func (*NetworkPacket_Init) isNetworkPacket_Packet() {}
 
-func (*NetworkPacket_Data) isNetworkPacket_Msg() {}
+func (*NetworkPacket_Data) isNetworkPacket_Packet() {}
 
 type InitMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -403,14 +403,14 @@ const file_github_com_moby_buildkit_session_netproxy_netproxy_proto_rawDesc = ""
 	"\x04addr\x18\x02 \x01(\v2\x19.moby.netproxy.v1.AddressR\x04addr\x12\x10\n" +
 	"\x03mtu\x18\x03 \x01(\rR\x03mtu\"\x1e\n" +
 	"\fDialResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"1\n" +
-	"\aAddress\x12\x12\n" +
-	"\x04addr\x18\x01 \x01(\tR\x04addr\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\rR\x04port\"\x81\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"-\n" +
+	"\aAddress\x12\x0e\n" +
+	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
+	"\x04port\x18\x02 \x01(\rR\x04port\"\x84\x01\n" +
 	"\rNetworkPacket\x123\n" +
 	"\x04init\x18\x01 \x01(\v2\x1d.moby.netproxy.v1.InitMessageH\x00R\x04init\x124\n" +
-	"\x04data\x18\x02 \x01(\v2\x1e.moby.netproxy.v1.BytesMessageH\x00R\x04dataB\x05\n" +
-	"\x03msg\"\x1d\n" +
+	"\x04data\x18\x02 \x01(\v2\x1e.moby.netproxy.v1.BytesMessageH\x00R\x04dataB\b\n" +
+	"\x06packet\"\x1d\n" +
 	"\vInitMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\"\n" +
 	"\fBytesMessage\x12\x12\n" +

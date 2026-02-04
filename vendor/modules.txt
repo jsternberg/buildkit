@@ -1426,7 +1426,7 @@ google.golang.org/protobuf/types/pluginpb
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# gvisor.dev/gvisor v0.0.0-20260130012333-5c79e3901d0a
+# gvisor.dev/gvisor v0.0.0-20260202191832-0bd9aedd142c
 ## explicit; go 1.25.5
 gvisor.dev/gvisor/pkg/abi/linux/errno
 gvisor.dev/gvisor/pkg/atomicbitops
@@ -1442,8 +1442,12 @@ gvisor.dev/gvisor/pkg/linewriter
 gvisor.dev/gvisor/pkg/log
 gvisor.dev/gvisor/pkg/rand
 gvisor.dev/gvisor/pkg/rawfile
+gvisor.dev/gvisor/pkg/refs
 gvisor.dev/gvisor/pkg/sleep
+gvisor.dev/gvisor/pkg/state
+gvisor.dev/gvisor/pkg/state/wire
 gvisor.dev/gvisor/pkg/sync
+gvisor.dev/gvisor/pkg/sync/locking
 gvisor.dev/gvisor/pkg/tcpip
 gvisor.dev/gvisor/pkg/tcpip/adapters/gonet
 gvisor.dev/gvisor/pkg/tcpip/checksum

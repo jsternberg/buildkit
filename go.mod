@@ -111,7 +111,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251103181224-f26f9409b101
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.11
-	gvisor.dev/gvisor v0.0.0-20260130012333-5c79e3901d0a
+	gvisor.dev/gvisor v0.0.0-20260202191832-0bd9aedd142c
 	kernel.org/pub/linux/libs/security/libcap/cap v1.2.77
 	tags.cncf.io/container-device-interface v1.1.0
 )

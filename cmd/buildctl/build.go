@@ -21,6 +21,7 @@ import (
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/auth/authprovider"
+	"github.com/moby/buildkit/session/netproxy/netproxyprovider"
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
@@ -140,7 +141,7 @@ func read(r io.Reader, clicontext *cli.Context) (*llb.Definition, error) {
 
 func openTraceFile(clicontext *cli.Context) (*os.File, error) {
 	if traceFileName := clicontext.String("trace"); traceFileName != "" {
-		return os.OpenFile(traceFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		return os.OpenFile(traceFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	}
 	return nil, nil
 }
@@ -154,7 +155,7 @@ func openCacheMetricsFile(clicontext *cli.Context) (*os.File, error) {
 	case "":
 		return nil, nil
 	default:
-		return os.OpenFile(out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0600)
+		return os.OpenFile(out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o600)
 	}
 }
 
@@ -188,10 +189,13 @@ func buildAction(clicontext *cli.Context) error {
 		return err
 	}
 
-	attachable := []session.Attachable{authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		AuthConfigProvider: authprovider.LoadAuthConfig(dockerConfig),
-		TLSConfigs:         tlsConfigs,
-	})}
+	attachable := []session.Attachable{
+		authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+			AuthConfigProvider: authprovider.LoadAuthConfig(dockerConfig),
+			TLSConfigs:         tlsConfigs,
+		}),
+		netproxyprovider.New(),
+	}
 
 	if ssh := clicontext.StringSlice("ssh"); len(ssh) > 0 {
 		configs, err := build.ParseSSH(ssh)
@@ -296,7 +300,7 @@ func buildAction(clicontext *cli.Context) error {
 	refFile := clicontext.String("ref-file")
 	if refFile != "" {
 		defer func() {
-			continuity.AtomicWriteFile(refFile, []byte(ref), 0666)
+			continuity.AtomicWriteFile(refFile, []byte(ref), 0o666)
 		}()
 	}
 
@@ -451,5 +455,5 @@ func writeMetadataFile(filename string, exporterResponse map[string]string) erro
 	if err != nil {
 		return err
 	}
-	return continuity.AtomicWriteFile(filename, b, 0666)
+	return continuity.AtomicWriteFile(filename, b, 0o666)
 }

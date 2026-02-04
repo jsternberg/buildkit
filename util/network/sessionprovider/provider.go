@@ -7,6 +7,7 @@ import (
 
 	"github.com/containerd/containerd/v2/pkg/oci"
 	resourcestypes "github.com/moby/buildkit/executor/resources/types"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/netproxy"
 	"github.com/moby/buildkit/util/network"
@@ -50,18 +51,19 @@ func (s *sessionProvider) New(ctx context.Context, hostname string, g session.Gr
 	}
 
 	var caller session.Caller
-	if err := s.sm.Any(ctx, g, func(ctx context.Context, s string, c session.Caller) error {
+	if err := s.sm.Any(ctx, g, func(_ context.Context, _ string, c session.Caller) error {
 		caller = c
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	return s.newSessionNS(hostname, caller)
+	return s.newSessionNS(caller)
 }
 
-func (s *sessionProvider) newSessionNS(hostname string, caller session.Caller) (_ *sessionNS, retErr error) {
-	ep, nsPath, err := createNetNS(s, hostname)
+func (s *sessionProvider) newSessionNS(caller session.Caller) (_ *sessionNS, retErr error) {
+	id := identity.NewID()
+	ep, nsPath, err := createNetNS(s, id)
 	if err != nil {
 		return nil, err
 	}

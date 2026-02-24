@@ -18,13 +18,13 @@ import (
 
 // NetworkProxy implements the NetworkProxyServer interface.
 type NetworkProxy struct {
-	conns map[string]net.Conn
+	conns map[string]*proxyConn
 	mu    sync.Mutex
 }
 
 func New() *NetworkProxy {
 	return &NetworkProxy{
-		conns: make(map[string]net.Conn),
+		conns: make(map[string]*proxyConn),
 	}
 }
 
@@ -41,9 +41,17 @@ func (p *NetworkProxy) Dial(ctx context.Context, req *netproxy.DialRequest) (*ne
 	// Generate a unique ID for this connection
 	id := identity.NewID()
 
+	mtu := req.Mtu
+	if mtu == 0 {
+		mtu = 1500
+	}
+
 	// Store the connection in the map
 	p.mu.Lock()
-	p.conns[id] = conn
+	p.conns[id] = &proxyConn{
+		Conn: conn,
+		mtu:  mtu,
+	}
 	p.mu.Unlock()
 
 	return &netproxy.DialResponse{
@@ -52,6 +60,7 @@ func (p *NetworkProxy) Dial(ctx context.Context, req *netproxy.DialRequest) (*ne
 }
 
 func (p *NetworkProxy) dial(ctx context.Context, req *netproxy.DialRequest) (net.Conn, error) {
+	fmt.Printf("dialing %s %s\n", req.Addr, req.Protocol)
 	switch req.Protocol {
 	case netproxy.Protocol_TCP:
 		return dialTCP(ctx, req)
@@ -64,6 +73,7 @@ func (p *NetworkProxy) dial(ctx context.Context, req *netproxy.DialRequest) (net
 
 func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkPacket, netproxy.NetworkPacket]) error {
 	// Read the first message which should be an InitMessage
+	fmt.Println("received connect attempt")
 	packet, err := stream.Recv()
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to receive init message: %v", err)
@@ -79,6 +89,7 @@ func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkP
 	if id == "" {
 		return status.Errorf(codes.InvalidArgument, "connection id is required")
 	}
+	fmt.Printf("connection id is %s\n", id)
 
 	// Look up and remove the connection from the map
 	p.mu.Lock()
@@ -115,6 +126,8 @@ func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkP
 				return status.Errorf(codes.InvalidArgument, "expected data message")
 			}
 
+			fmt.Printf("received data packet of size %d\n", len(dataMsg.Data.Data))
+
 			// Write to the connection
 			if _, err := conn.Write(dataMsg.Data.Data); err != nil {
 				return err
@@ -124,7 +137,8 @@ func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkP
 
 	// Goroutine 2: Read from connection and write to stream
 	eg.Go(func() error {
-		buf := make([]byte, 32*1024) // 32KB buffer
+		fmt.Printf("connection mtu %d\n", conn.mtu)
+		buf := make([]byte, conn.mtu)
 		for {
 			select {
 			case <-ctx.Done():
@@ -133,6 +147,7 @@ func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkP
 			}
 
 			n, err := conn.Read(buf)
+			fmt.Printf("read %d bytes from connection\n", n)
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
@@ -170,6 +185,7 @@ func dialTCP(ctx context.Context, req *netproxy.DialRequest) (net.Conn, error) {
 		return nil, status.Errorf(codes.Unavailable, "failed to dial %s: %v", addr, err)
 	}
 
+	fmt.Println("successfully dialed location")
 	return conn, nil
 }
 
@@ -186,4 +202,9 @@ func dialUDP(ctx context.Context, req *netproxy.DialRequest) (net.Conn, error) {
 	}
 
 	return conn, nil
+}
+
+type proxyConn struct {
+	net.Conn
+	mtu uint32
 }

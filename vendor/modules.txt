@@ -1459,6 +1459,7 @@ gvisor.dev/gvisor/pkg/tcpip/link/channel
 gvisor.dev/gvisor/pkg/tcpip/link/fdbased
 gvisor.dev/gvisor/pkg/tcpip/link/nested
 gvisor.dev/gvisor/pkg/tcpip/link/packetsocket
+gvisor.dev/gvisor/pkg/tcpip/link/sniffer
 gvisor.dev/gvisor/pkg/tcpip/link/stopfd
 gvisor.dev/gvisor/pkg/tcpip/link/tun
 gvisor.dev/gvisor/pkg/tcpip/network/hash
@@ -1466,7 +1467,6 @@ gvisor.dev/gvisor/pkg/tcpip/network/internal/fragmentation
 gvisor.dev/gvisor/pkg/tcpip/network/internal/ip
 gvisor.dev/gvisor/pkg/tcpip/network/internal/multicast
 gvisor.dev/gvisor/pkg/tcpip/network/ipv4
-gvisor.dev/gvisor/pkg/tcpip/network/ipv6
 gvisor.dev/gvisor/pkg/tcpip/ports
 gvisor.dev/gvisor/pkg/tcpip/seqnum
 gvisor.dev/gvisor/pkg/tcpip/stack

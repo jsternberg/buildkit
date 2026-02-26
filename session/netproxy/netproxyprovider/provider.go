@@ -72,7 +72,7 @@ func (p *NetworkProxy) dial(ctx context.Context, req *netproxy.DialRequest) (net
 }
 
 func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkPacket, netproxy.NetworkPacket]) error {
-	// Read the first message which should be an InitMessage
+	// Read the first message which should be an InitMessage.
 	fmt.Println("received connect attempt")
 	packet, err := stream.Recv()
 	if err != nil {
@@ -110,7 +110,16 @@ func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkP
 	eg, ctx := errgroup.WithContext(stream.Context())
 
 	// Goroutine 1: Read from stream and write to connection
-	eg.Go(func() error {
+	eg.Go(func() (retErr error) {
+		defer func() {
+			fmt.Println("recv stream is exiting")
+
+			if retErr != nil {
+				return
+			}
+			retErr = conn.CloseWrite()
+		}()
+
 		for {
 			packet, err := stream.Recv()
 			if errors.Is(err, io.EOF) {
@@ -126,17 +135,37 @@ func (p *NetworkProxy) Connect(stream grpc.BidiStreamingServer[netproxy.NetworkP
 				return status.Errorf(codes.InvalidArgument, "expected data message")
 			}
 
-			fmt.Printf("received data packet of size %d\n", len(dataMsg.Data.Data))
+			fmt.Printf("received data packet of size %d eof:%v\n", len(dataMsg.Data.Data), dataMsg.Data.Eof)
 
 			// Write to the connection
-			if _, err := conn.Write(dataMsg.Data.Data); err != nil {
+			if _, err := conn.Write(dataMsg.Data.Data); err != nil || dataMsg.Data.Eof {
 				return err
 			}
 		}
 	})
 
 	// Goroutine 2: Read from connection and write to stream
-	eg.Go(func() error {
+	eg.Go(func() (retErr error) {
+		defer func() {
+			fmt.Println("read connection exiting")
+			if retErr != nil {
+				return
+			}
+
+			packet := &netproxy.NetworkPacket{
+				Packet: &netproxy.NetworkPacket_Data{
+					Data: &netproxy.BytesMessage{
+						Eof: true,
+					},
+				},
+			}
+
+			fmt.Println("sending eof message on write stream")
+			if err := stream.Send(packet); err != nil {
+				retErr = err
+			}
+		}()
+
 		fmt.Printf("connection mtu %d\n", conn.mtu)
 		buf := make([]byte, conn.mtu)
 		for {
@@ -207,4 +236,11 @@ func dialUDP(ctx context.Context, req *netproxy.DialRequest) (net.Conn, error) {
 type proxyConn struct {
 	net.Conn
 	mtu uint32
+}
+
+func (c *proxyConn) CloseWrite() error {
+	if conn, ok := c.Conn.(*net.TCPConn); ok {
+		return conn.CloseWrite()
+	}
+	return nil
 }

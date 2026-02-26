@@ -42,4 +42,5 @@ message InitMessage {
 
 message BytesMessage {
   bytes data = 1;
+  bool eof = 2;
 }

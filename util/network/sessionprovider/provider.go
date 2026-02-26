@@ -120,7 +120,9 @@ func (s *sessionNS) Set(spec *specs.Spec) error {
 }
 
 func (s *sessionNS) Close() error {
+	bklog.G(context.Background()).Debug("closing session stack")
 	s.stack.Close()
+	bklog.G(context.Background()).Debugf("deleting namespace at %s", s.nsPath)
 	return deleteNetNS(s.nsPath)
 }
 
@@ -264,15 +266,21 @@ func streamConn(local *gonet.TCPConn, remote grpc.BidiStreamingClient[netproxy.N
 			if retErr != nil {
 				bklog.G(context.Background()).Debugf("error in send loop: %s", retErr)
 			}
+			bklog.G(context.Background()).Debug("closed send loop")
 		}()
-		defer remote.CloseSend()
+		defer func() {
+			bklog.G(context.Background()).Debug("closing send side of the remote connection")
+			remote.CloseSend()
+		}()
 
 		// read from the local, send to the remote.
 		// todo: use the mtu from the physical tunnel
 		buf := make([]byte, 1500)
 		for {
+			bklog.G(context.Background()).Debug("reading from local connection")
 			n, err := local.Read(buf)
 			if err != nil {
+				bklog.G(context.Background()).Debugf("encountered error in send loop: %s", err)
 				return nonEOFError(err)
 			}
 
@@ -302,12 +310,19 @@ func streamConn(local *gonet.TCPConn, remote grpc.BidiStreamingClient[netproxy.N
 		for {
 			pkt, err := remote.Recv()
 			if err != nil {
+				bklog.G(context.Background()).Debugf("remote receive error: %s", err)
 				return nonEOFError(err)
 			}
 
 			if data, ok := pkt.Packet.(*netproxy.NetworkPacket_Data); ok {
-				if _, err := local.Write(data.Data.Data); err != nil {
-					return err
+				if len(data.Data.Data) > 0 {
+					if _, err := local.Write(data.Data.Data); err != nil {
+						return err
+					}
+				}
+
+				if data.Data.Eof {
+					return nil
 				}
 			} else {
 				return errors.Errorf("unexpected packet type: %T", pkt.Packet)

@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"gvisor.dev/gvisor/pkg/rawfile"
 	"gvisor.dev/gvisor/pkg/tcpip/link/fdbased"
+	"gvisor.dev/gvisor/pkg/tcpip/link/sniffer"
 	"gvisor.dev/gvisor/pkg/tcpip/link/tun"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
@@ -91,11 +92,16 @@ func createNetNS(s *sessionProvider, id string) (ep stack.LinkEndpoint, _ string
 			return err
 		}
 
-		ep, err = fdbased.New(&fdbased.Options{
+		lower, err := fdbased.New(&fdbased.Options{
 			FDs: []int{fd},
 			MTU: mtu,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+
+		ep = sniffer.New(lower)
+		return nil
 	}
 
 	go func() {

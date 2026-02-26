@@ -352,6 +352,7 @@ func (x *InitMessage) GetId() string {
 type BytesMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	Eof           bool                   `protobuf:"varint,2,opt,name=eof,proto3" json:"eof,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -393,6 +394,13 @@ func (x *BytesMessage) GetData() []byte {
 	return nil
 }
 
+func (x *BytesMessage) GetEof() bool {
+	if x != nil {
+		return x.Eof
+	}
+	return false
+}
+
 var File_github_com_moby_buildkit_session_netproxy_netproxy_proto protoreflect.FileDescriptor
 
 const file_github_com_moby_buildkit_session_netproxy_netproxy_proto_rawDesc = "" +
@@ -412,9 +420,10 @@ const file_github_com_moby_buildkit_session_netproxy_netproxy_proto_rawDesc = ""
 	"\x04data\x18\x02 \x01(\v2\x1e.moby.netproxy.v1.BytesMessageH\x00R\x04dataB\b\n" +
 	"\x06packet\"\x1d\n" +
 	"\vInitMessage\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\"\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
 	"\fBytesMessage\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data*\x1c\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\x12\x10\n" +
+	"\x03eof\x18\x02 \x01(\bR\x03eof*\x1c\n" +
 	"\bProtocol\x12\a\n" +
 	"\x03TCP\x10\x00\x12\a\n" +
 	"\x03UDP\x10\x012\xa6\x01\n" +

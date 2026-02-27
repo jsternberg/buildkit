@@ -9,6 +9,7 @@ import (
 	"github.com/moby/buildkit/util/bklog"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -332,6 +333,9 @@ func (e *edge) skipPhase2FastCache(dep *dep) bool {
 //  2. this function may not return outgoing requests if it has completed all
 //     incoming requests
 func (e *edge) unpark(ctx context.Context, tracer trace.Tracer, incoming []pipeSender, updates, allPipes []pipeReceiver, f *pipeFactory) {
+	ctx, span := tracer.Start(ctx, "(*edge).unpark", withTraceAttributes(e))
+	defer span.End()
+
 	// process all incoming changes
 	e.processUpdates(ctx, tracer, updates)
 
@@ -1068,6 +1072,13 @@ func withSelector(keys []ExportableCacheKey, selector digest.Digest) []CacheKeyW
 		out[i] = CacheKeyWithSelector{Selector: selector, CacheKey: k}
 	}
 	return out
+}
+
+func withTraceAttributes(e *edge) trace.SpanStartEventOption {
+	return trace.WithAttributes(
+		attribute.String("vertex", string(e.edge.Vertex.Digest())),
+		attribute.Int("index", int(e.edge.Index)),
+	)
 }
 
 type (

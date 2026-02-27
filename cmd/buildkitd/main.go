@@ -39,7 +39,6 @@ import (
 	"github.com/moby/buildkit/frontend/gateway/forwarder"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver"
-	"github.com/moby/buildkit/solver/bboltcachestorage"
 	"github.com/moby/buildkit/solver/llbsolver/cdidevices"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/appcontext"
@@ -826,7 +825,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp t
 		frontends["gateway.v0"] = gwfe
 	}
 
-	cacheStorage, err := bboltcachestorage.NewStore(filepath.Join(cfg.Root, "cache.db"))
+	cacheStorage, err := newCacheKeyStorage(cfg.Root)
 	if err != nil {
 		return nil, err
 	}

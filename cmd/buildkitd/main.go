@@ -72,6 +72,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	tracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -318,7 +319,7 @@ func main() {
 		}
 		cfg.Root = root
 
-		if err := os.MkdirAll(root, 0700); err != nil {
+		if err := os.MkdirAll(root, 0o700); err != nil {
 			return errors.Wrapf(err, "failed to create %s", root)
 		}
 
@@ -361,7 +362,7 @@ func main() {
 			defer db.Close()
 		}
 
-		controller, err := newController(ctx, c, &cfg)
+		controller, err := newController(ctx, c, &cfg, tp)
 		if err != nil {
 			return err
 		}
@@ -779,7 +780,7 @@ func serverCredentials(cfg config.TLSConfig) (*tls.Config, error) {
 	return tlsConf, nil
 }
 
-func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*control.Controller, error) {
+func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp trace.TracerProvider) (*control.Controller, error) {
 	sessionManager, err := session.NewManager()
 	if err != nil {
 		return nil, err
@@ -831,7 +832,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 	}
 	cacheStoreForDebug = cacheStorage
 
-	historyDB, err := boltutil.SafeOpen(filepath.Join(cfg.Root, "history.db"), 0600, nil)
+	historyDB, err := boltutil.SafeOpen(filepath.Join(cfg.Root, "history.db"), 0o600, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -879,7 +880,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 		Frontends:                 frontends,
 		ResolveCacheExporterFuncs: remoteCacheExporterFuncs,
 		ResolveCacheImporterFuncs: remoteCacheImporterFuncs,
-		CacheManager:              solver.NewCacheManager(context.TODO(), "local", cacheStorage, worker.NewCacheResultStorage(wc)),
+		CacheManager:              solver.NewCacheManager(context.TODO(), "local", cacheStorage, worker.NewCacheResultStorage(wc), solver.WithTracerProvider(tp)),
 		Entitlements:              cfg.Entitlements,
 		TraceCollector:            tc,
 		HistoryDB:                 historyDB,
@@ -890,6 +891,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 		GarbageCollect:            w.GarbageCollect,
 		GracefulStop:              ctx.Done(),
 		ProvenanceEnv:             provenanceEnv,
+		TracerProvider:            tp,
 	})
 }
 

@@ -45,6 +45,7 @@ import (
 	"github.com/moby/buildkit/worker"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -83,6 +84,7 @@ type Opt struct {
 	HistoryQueue     *HistoryQueue
 	ResourceMonitor  *resources.Monitor
 	ProvenanceEnv    map[string]any
+	TracerProvider   trace.TracerProvider
 }
 
 type Solver struct {
@@ -137,8 +139,9 @@ func New(opt Opt) (*Solver, error) {
 	s.sysSampler = sampler
 
 	s.solver = solver.NewSolver(solver.SolverOpt{
-		ResolveOpFunc: s.resolver(),
-		DefaultCache:  opt.CacheManager,
+		ResolveOpFunc:  s.resolver(),
+		DefaultCache:   opt.CacheManager,
+		TracerProvider: opt.TracerProvider,
 	})
 	return s, nil
 }

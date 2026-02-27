@@ -9,6 +9,7 @@ import (
 	"github.com/moby/buildkit/util/bklog"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type edgeStatusType int
@@ -193,14 +194,17 @@ func (e *edge) updateIncoming(req pipeSender) {
 
 // probeCache is called with unprocessed cache keys for dependency
 // if the key could match the edge, the cacheRecords for dependency are filled
-func (e *edge) probeCache(d *dep, depKeys []CacheKeyWithSelector) bool {
+func (e *edge) probeCache(ctx context.Context, tracer trace.Tracer, d *dep, depKeys []CacheKeyWithSelector) bool {
+	ctx, span := tracer.Start(ctx, "(*edge).probeCache")
+	defer span.End()
+
 	if len(depKeys) == 0 {
 		return false
 	}
 	if e.op.IgnoreCache() {
 		return false
 	}
-	keys, err := e.op.Cache().Query(depKeys, d.index, e.cacheMap.Digest, e.edge.Index)
+	keys, err := e.op.Cache().Query(ctx, depKeys, d.index, e.cacheMap.Digest, e.edge.Index)
 	if err != nil {
 		e.err = errors.Wrap(err, "error on cache query")
 	}
@@ -327,9 +331,9 @@ func (e *edge) skipPhase2FastCache(dep *dep) bool {
 //     requests were not completed
 //  2. this function may not return outgoing requests if it has completed all
 //     incoming requests
-func (e *edge) unpark(incoming []pipeSender, updates, allPipes []pipeReceiver, f *pipeFactory) {
+func (e *edge) unpark(ctx context.Context, tracer trace.Tracer, incoming []pipeSender, updates, allPipes []pipeReceiver, f *pipeFactory) {
 	// process all incoming changes
-	e.processUpdates(updates)
+	e.processUpdates(ctx, tracer, updates)
 
 	desiredState, done := e.respondToIncoming(incoming, allPipes)
 	if done {
@@ -377,40 +381,43 @@ func (e *edge) markFailed(f *pipeFactory, err error) {
 	})
 }
 
-func (e *edge) processUpdates(updates []pipe.Receiver[*edgeRequest, any]) {
+func (e *edge) processUpdates(ctx context.Context, tracer trace.Tracer, updates []pipe.Receiver[*edgeRequest, any]) {
 	depChanged := false
 	for _, upt := range updates {
-		depChanged = e.processUpdate(upt) || depChanged
+		depChanged = e.processUpdate(ctx, tracer, upt) || depChanged
 	}
 
 	if depChanged {
-		e.recalcCurrentState()
+		e.recalcCurrentState(ctx, tracer)
 	}
 }
 
 // processUpdate is called by unpark for every updated pipe request
-func (e *edge) processUpdate(upt pipeReceiver) (depChanged bool) {
+func (e *edge) processUpdate(ctx context.Context, tracer trace.Tracer, upt pipeReceiver) (depChanged bool) {
+	ctx, span := tracer.Start(ctx, "(*edge).processUpdate")
+	defer span.End()
+
 	// response for cachemap request
 	if upt == e.cacheMapReq && upt.Status().Completed {
-		e.processCacheMapReq()
+		e.processCacheMapReq(ctx, tracer)
 		return true
 	}
 
 	// response for exec request
 	if upt == e.execReq && upt.Status().Completed {
-		e.processExecReq()
+		e.processExecReq(ctx, tracer)
 		return true
 	}
 
 	// response for requests to dependencies
 	if dep, ok := e.depRequests[upt]; ok {
-		return e.processDepReq(dep)
+		return e.processDepReq(ctx, tracer, dep)
 	}
 
 	// response for result based cache function
 	for i, dep := range e.deps {
 		if upt == dep.slowCacheReq && upt.Status().Completed {
-			e.processDepSlowCacheReq(i, dep)
+			e.processDepSlowCacheReq(ctx, tracer, i, dep)
 			return true
 		}
 	}
@@ -420,7 +427,10 @@ func (e *edge) processUpdate(upt pipeReceiver) (depChanged bool) {
 
 // recalcCurrentState is called by unpark to recompute internal state after
 // the state of dependencies has changed
-func (e *edge) recalcCurrentState() {
+func (e *edge) recalcCurrentState(ctx context.Context, tracer trace.Tracer) {
+	_, span := tracer.Start(ctx, "(*edge).recalcCurrentState")
+	defer span.End()
+
 	// TODO: fast pass to detect incomplete results
 	newKeys := map[string]*CacheKey{}
 
@@ -467,7 +477,7 @@ func (e *edge) recalcCurrentState() {
 			}
 		}
 
-		records, err := e.op.Cache().Records(context.Background(), mergedKey)
+		records, err := e.op.Cache().Records(ctx, mergedKey)
 		if err != nil {
 			bklog.G(context.TODO()).Errorf("error receiving cache records: %v", err)
 			continue
@@ -565,7 +575,10 @@ func (e *edge) recalcCurrentState() {
 	}
 }
 
-func (e *edge) processCacheMapReq() {
+func (e *edge) processCacheMapReq(ctx context.Context, tracer trace.Tracer) {
+	ctx, span := tracer.Start(ctx, "(*edge).processCacheMapReq")
+	defer span.End()
+
 	upt := e.cacheMapReq
 	if err := upt.Status().Err; err != nil {
 		e.cacheMapReq = nil
@@ -582,13 +595,13 @@ func (e *edge) processCacheMapReq() {
 	if len(e.deps) == 0 {
 		e.cacheMapDigests = append(e.cacheMapDigests, e.cacheMap.Digest)
 		if !e.op.IgnoreCache() {
-			keys, err := e.op.Cache().Query(nil, 0, e.cacheMap.Digest, e.edge.Index)
+			keys, err := e.op.Cache().Query(ctx, nil, 0, e.cacheMap.Digest, e.edge.Index)
 			if err != nil {
 				bklog.G(context.TODO()).Error(errors.Wrap(err, "invalid query response")) // make the build fail for this error
 			} else {
 				for _, k := range keys {
 					k.vtx = e.edge.Vertex.Digest()
-					records, err := e.op.Cache().Records(context.Background(), k)
+					records, err := e.op.Cache().Records(ctx, k)
 					if err != nil {
 						bklog.G(context.TODO()).Errorf("error receiving cache records: %v", err)
 						continue
@@ -609,7 +622,7 @@ func (e *edge) processCacheMapReq() {
 	}
 	// probe keys that were loaded before cache map
 	for i, dep := range e.deps {
-		e.probeCache(dep, withSelector(dep.keys, e.cacheMap.Deps[i].Selector))
+		e.probeCache(ctx, tracer, dep, withSelector(dep.keys, e.cacheMap.Deps[i].Selector))
 		e.checkDepMatchPossible(dep)
 	}
 	if !e.cacheMapDone {
@@ -617,7 +630,10 @@ func (e *edge) processCacheMapReq() {
 	}
 }
 
-func (e *edge) processExecReq() {
+func (e *edge) processExecReq(ctx context.Context, tracer trace.Tracer) {
+	ctx, span := tracer.Start(ctx, "(*edge).processExecReq")
+	defer span.End()
+
 	upt := e.execReq
 	if err := upt.Status().Err; err != nil {
 		e.execReq = nil
@@ -635,7 +651,10 @@ func (e *edge) processExecReq() {
 	e.state = edgeStatusComplete
 }
 
-func (e *edge) processDepReq(dep *dep) (depChanged bool) {
+func (e *edge) processDepReq(ctx context.Context, tracer trace.Tracer, dep *dep) (depChanged bool) {
+	ctx, span := tracer.Start(ctx, "(*edge).processDepReq")
+	defer span.End()
+
 	upt := dep.req
 	if err := upt.Status().Err; !upt.Status().Canceled && upt.Status().Completed && err != nil {
 		if e.err == nil {
@@ -657,7 +676,7 @@ func (e *edge) processDepReq(dep *dep) (depChanged bool) {
 	if len(dep.keys) < len(state.keys) {
 		newKeys := state.keys[len(dep.keys):]
 		if e.cacheMap != nil {
-			e.probeCache(dep, withSelector(newKeys, e.cacheMap.Deps[dep.index].Selector))
+			e.probeCache(ctx, tracer, dep, withSelector(newKeys, e.cacheMap.Deps[dep.index].Selector))
 			dep.keys = state.keys
 			if e.allDepsHaveKeys(false) {
 				e.keysDidChange = true
@@ -681,7 +700,10 @@ func (e *edge) processDepReq(dep *dep) (depChanged bool) {
 	return depChanged
 }
 
-func (e *edge) processDepSlowCacheReq(index int, dep *dep) {
+func (e *edge) processDepSlowCacheReq(ctx context.Context, tracer trace.Tracer, index int, dep *dep) {
+	ctx, span := tracer.Start(ctx, "(*edge).processDepSlowCacheReq")
+	defer span.End()
+
 	upt := dep.slowCacheReq
 	if err := upt.Status().Err; err != nil {
 		dep.slowCacheReq = nil
@@ -698,10 +720,10 @@ func (e *edge) processDepSlowCacheReq(index int, dep *dep) {
 			for _, dk := range dep.result.CacheKeys() {
 				defKeys = append(defKeys, CacheKeyWithSelector{CacheKey: dk, Selector: e.cacheMap.Deps[index].Selector})
 			}
-			dep.slowCacheFoundKey = e.probeCache(dep, []CacheKeyWithSelector{slowKeyExp})
+			dep.slowCacheFoundKey = e.probeCache(ctx, tracer, dep, []CacheKeyWithSelector{slowKeyExp})
 
 			// connect def key to slow key
-			e.op.Cache().Query(append(defKeys, slowKeyExp), dep.index, e.cacheMap.Digest, e.edge.Index)
+			e.op.Cache().Query(ctx, append(defKeys, slowKeyExp), dep.index, e.cacheMap.Digest, e.edge.Index)
 		}
 
 		dep.slowCacheComplete = true

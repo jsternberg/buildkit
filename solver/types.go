@@ -132,8 +132,7 @@ type CacheExporterRecord interface {
 	isCacheExporterRecord()
 }
 
-type CacheExporterRecordBase struct {
-}
+type CacheExporterRecordBase struct{}
 
 func (c *CacheExporterRecordBase) isCacheExporterRecord() {}
 
@@ -198,8 +197,10 @@ type ProvenanceProvider interface {
 	IsProvenanceProvider()
 }
 
-type ResultBasedCacheFunc func(context.Context, Result, session.Group) (digest.Digest, error)
-type PreprocessFunc func(context.Context, Result, session.Group) error
+type (
+	ResultBasedCacheFunc func(context.Context, Result, session.Group) (digest.Digest, error)
+	PreprocessFunc       func(context.Context, Result, session.Group) error
+)
 
 // CacheMap is a description for calculating the cache key of an operation.
 type CacheMap struct {
@@ -278,7 +279,7 @@ type CacheManager interface {
 
 	// Query searches for cache paths from one cache key to the output of a
 	// possible match.
-	Query(inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
+	Query(ctx context.Context, inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
 	Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error)
 
 	// Load loads a cache record into a result reference.

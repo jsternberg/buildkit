@@ -49,6 +49,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	tracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -75,6 +76,7 @@ type Opt struct {
 	GarbageCollect            func(context.Context) error
 	GracefulStop              <-chan struct{}
 	ProvenanceEnv             map[string]any
+	TracerProvider            oteltrace.TracerProvider
 }
 
 type Controller struct { // TODO: ControlService
@@ -116,6 +118,7 @@ func NewController(opt Opt) (*Controller, error) {
 		Entitlements:     opt.Entitlements,
 		HistoryQueue:     hq,
 		ProvenanceEnv:    opt.ProvenanceEnv,
+		TracerProvider:   opt.TracerProvider,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create solver")

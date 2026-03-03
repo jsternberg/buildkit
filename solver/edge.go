@@ -363,10 +363,10 @@ func (e *edge) unpark(ctx context.Context, tracer trace.Tracer, incoming []pipeS
 	}
 
 	if e.execReq == nil {
-		if added := e.createInputRequests(desiredState, f, false); !added && !e.hasActiveOutgoing && !cacheMapReq {
+		if added := e.createInputRequests(ctx, desiredState, f, false); !added && !e.hasActiveOutgoing && !cacheMapReq {
 			bklog.G(context.TODO()).Errorf("buildkit scheduling error: leaving incoming open. forcing solve. Please report this with BUILDKIT_SCHEDULER_DEBUG=1")
 			debugSchedulerPreUnpark(e, incoming, updates, allPipes)
-			e.createInputRequests(desiredState, f, true)
+			e.createInputRequests(ctx, desiredState, f, true)
 		}
 	}
 }
@@ -434,6 +434,14 @@ func (e *edge) processUpdate(ctx context.Context, tracer trace.Tracer, upt pipeR
 func (e *edge) recalcCurrentState(ctx context.Context, tracer trace.Tracer) {
 	_, span := tracer.Start(ctx, "(*edge).recalcCurrentState")
 	defer span.End()
+
+	prevState := e.state
+	defer func() {
+		span.SetAttributes(
+			attribute.Stringer("previous_state", prevState),
+			attribute.Stringer("current_state", e.state),
+		)
+	}()
 
 	// TODO: fast pass to detect incomplete results
 	newKeys := map[string]*CacheKey{}
@@ -815,16 +823,27 @@ func (e *edge) respondToIncoming(incoming []pipeSender, allPipes []pipeReceiver)
 
 // createInputRequests creates new requests for dependencies or async functions
 // that need to complete to continue processing the edge
-func (e *edge) createInputRequests(desiredState edgeStatusType, f *pipeFactory, force bool) (addedNew bool) {
+func (e *edge) createInputRequests(ctx context.Context, desiredState edgeStatusType, f *pipeFactory, force bool) (addedNew bool) {
+	span := trace.SpanFromContext(ctx)
+
 	// initialize deps state
 	e.ensureDepsInitialized()
 
 	// cycle all dependencies. set up outgoing requests if needed
-	for _, dep := range e.deps {
+	for i, dep := range e.deps {
 		desiredStateDep := e.desiredStateDep(dep, desiredState, force)
 
 		// outgoing request is needed
 		if dep.state < desiredStateDep {
+			if span.IsRecording() {
+				inp := e.edge.Vertex.Inputs()[i]
+				span.AddEvent("createOutgoingRequest", trace.WithAttributes(
+					attribute.String("vertex", string(inp.Vertex.Digest())),
+					attribute.Int("index", int(inp.Index)),
+					attribute.Stringer("current_state", dep.state),
+					attribute.Stringer("desired_state", desiredStateDep),
+				))
+			}
 			addedNew = e.createOutgoingRequest(dep, desiredStateDep, f) || addedNew
 		} else {
 			debugSchedulerSkipInputRequestBasedOnDepState(e, dep, desiredStateDep)

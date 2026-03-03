@@ -443,51 +443,13 @@ func (e *edge) recalcCurrentState(ctx context.Context, tracer trace.Tracer) {
 		)
 	}()
 
-	// TODO: fast pass to detect incomplete results
-	newKeys := map[string]*CacheKey{}
-
-	for i, dep := range e.deps {
-		if i == 0 {
-			for id, k := range dep.keyMap {
-				if _, ok := e.keyMap[id]; ok {
-					continue
-				}
-				newKeys[id] = k
-			}
-		} else {
-			for id := range newKeys {
-				if _, ok := dep.keyMap[id]; !ok {
-					delete(newKeys, id)
-				}
-			}
-		}
-		if len(newKeys) == 0 {
-			break
-		}
-	}
-
+	newKeys := e.detectNewKeys()
 	for key := range newKeys {
 		e.keyMap[key] = struct{}{}
 	}
 
 	for _, r := range newKeys {
-		// TODO: add all deps automatically
-		mergedKey := r.clone()
-		mergedKey.deps = make([][]CacheKeyWithSelector, len(e.deps))
-		for i, dep := range e.deps {
-			if dep.result != nil {
-				for _, dk := range dep.result.CacheKeys() {
-					mergedKey.deps[i] = append(mergedKey.deps[i], CacheKeyWithSelector{Selector: e.cacheMap.Deps[i].Selector, CacheKey: dk})
-				}
-				if dep.slowCacheKey != nil {
-					mergedKey.deps[i] = append(mergedKey.deps[i], CacheKeyWithSelector{CacheKey: *dep.slowCacheKey})
-				}
-			} else {
-				for _, k := range dep.keys {
-					mergedKey.deps[i] = append(mergedKey.deps[i], CacheKeyWithSelector{Selector: e.cacheMap.Deps[i].Selector, CacheKey: k})
-				}
-			}
-		}
+		mergedKey := e.mergeKey(r)
 
 		records, err := e.op.Cache().Records(ctx, mergedKey)
 		if err != nil {
@@ -640,6 +602,61 @@ func (e *edge) processCacheMapReq(ctx context.Context, tracer trace.Tracer) {
 	if !e.cacheMapDone {
 		e.cacheMapReq = nil
 	}
+}
+
+func (e *edge) detectNewKeys() map[string]*CacheKey {
+	if len(e.deps) == 0 {
+		return nil
+	}
+
+	// TODO: fast pass to detect incomplete results
+	newKeys := map[string]*CacheKey{}
+
+	dep := e.deps[0]
+	for id, k := range dep.keyMap {
+		if _, ok := e.keyMap[id]; ok {
+			continue
+		}
+		newKeys[id] = k
+	}
+
+	if len(newKeys) == 0 {
+		return nil
+	}
+
+	for _, dep := range e.deps[1:] {
+		for id := range newKeys {
+			if _, ok := dep.keyMap[id]; !ok {
+				delete(newKeys, id)
+			}
+		}
+
+		if len(newKeys) == 0 {
+			return nil
+		}
+	}
+	return newKeys
+}
+
+func (e *edge) mergeKey(r *CacheKey) *CacheKey {
+	// TODO: add all deps automatically
+	mergedKey := r.clone()
+	mergedKey.deps = make([][]CacheKeyWithSelector, len(e.deps))
+	for i, dep := range e.deps {
+		if dep.result != nil {
+			for _, dk := range dep.result.CacheKeys() {
+				mergedKey.deps[i] = append(mergedKey.deps[i], CacheKeyWithSelector{Selector: e.cacheMap.Deps[i].Selector, CacheKey: dk})
+			}
+			if dep.slowCacheKey != nil {
+				mergedKey.deps[i] = append(mergedKey.deps[i], CacheKeyWithSelector{CacheKey: *dep.slowCacheKey})
+			}
+		} else {
+			for _, k := range dep.keys {
+				mergedKey.deps[i] = append(mergedKey.deps[i], CacheKeyWithSelector{Selector: e.cacheMap.Deps[i].Selector, CacheKey: k})
+			}
+		}
+	}
+	return mergedKey
 }
 
 func (e *edge) processExecReq(ctx context.Context, tracer trace.Tracer) {

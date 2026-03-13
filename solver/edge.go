@@ -438,8 +438,8 @@ func (e *edge) recalcCurrentState(ctx context.Context, tracer trace.Tracer) {
 	prevState := e.state
 	defer func() {
 		span.SetAttributes(
-			attribute.Stringer("previous_state", prevState),
-			attribute.Stringer("current_state", e.state),
+			attribute.Stringer("state.previous", prevState),
+			attribute.Stringer("state.current", e.state),
 		)
 	}()
 
@@ -857,8 +857,8 @@ func (e *edge) createInputRequests(ctx context.Context, desiredState edgeStatusT
 				span.AddEvent("createOutgoingRequest", trace.WithAttributes(
 					attribute.String("vertex", string(inp.Vertex.Digest())),
 					attribute.Int("index", int(inp.Index)),
-					attribute.Stringer("current_state", dep.state),
-					attribute.Stringer("desired_state", desiredStateDep),
+					attribute.Stringer("state.current", dep.state),
+					attribute.Stringer("state.desired", desiredStateDep),
 				))
 			}
 			addedNew = e.createOutgoingRequest(dep, desiredStateDep, f) || addedNew

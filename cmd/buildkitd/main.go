@@ -25,6 +25,7 @@ import (
 	"github.com/moby/buildkit/cache/remotecache"
 	"github.com/moby/buildkit/cache/remotecache/azblob"
 	"github.com/moby/buildkit/cache/remotecache/gha"
+	httpremotecache "github.com/moby/buildkit/cache/remotecache/http"
 	inlineremotecache "github.com/moby/buildkit/cache/remotecache/inline"
 	localremotecache "github.com/moby/buildkit/cache/remotecache/local"
 	registryremotecache "github.com/moby/buildkit/cache/remotecache/registry"
@@ -318,7 +319,7 @@ func main() {
 		}
 		cfg.Root = root
 
-		if err := os.MkdirAll(root, 0700); err != nil {
+		if err := os.MkdirAll(root, 0o700); err != nil {
 			return errors.Wrapf(err, "failed to create %s", root)
 		}
 
@@ -831,7 +832,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 	}
 	cacheStoreForDebug = cacheStorage
 
-	historyDB, err := boltutil.SafeOpen(filepath.Join(cfg.Root, "history.db"), 0600, nil)
+	historyDB, err := boltutil.SafeOpen(filepath.Join(cfg.Root, "history.db"), 0o600, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -855,6 +856,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 		"gha":      gha.ResolveCacheExporterFunc(cfg.Cache.GHA, verifierProvider),
 		"s3":       s3remotecache.ResolveCacheExporterFunc(),
 		"azblob":   azblob.ResolveCacheExporterFunc(),
+		"http":     httpremotecache.ResolveCacheExporterFunc(),
 	}
 	remoteCacheImporterFuncs := map[string]remotecache.ResolveCacheImporterFunc{
 		"registry": registryremotecache.ResolveCacheImporterFunc(sessionManager, w.ContentStore(), resolverFn),
@@ -862,6 +864,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 		"gha":      gha.ResolveCacheImporterFunc(cfg.Cache.GHA, verifierProvider),
 		"s3":       s3remotecache.ResolveCacheImporterFunc(),
 		"azblob":   azblob.ResolveCacheImporterFunc(),
+		"http":     httpremotecache.ResolveCacheImporterFunc(),
 	}
 
 	if cfg.CDI.Disabled == nil || !*cfg.CDI.Disabled {

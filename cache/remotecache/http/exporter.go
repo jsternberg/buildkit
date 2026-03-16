@@ -9,7 +9,7 @@ import (
 )
 
 // ResolveCacheExporterFunc for "local" cache exporter.
-func ResolveCacheExporterFunc(sm *session.Manager) remotecache.ResolveCacheExporterFunc {
+func ResolveCacheExporterFunc() remotecache.ResolveCacheExporterFunc {
 	return func(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Exporter, error) {
 		return nil, errors.New("implement me")
 	}

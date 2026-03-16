@@ -21,18 +21,28 @@ import (
 // ResolveCacheImporterFunc for "local" cache importer.
 func ResolveCacheImporterFunc() remotecache.ResolveCacheImporterFunc {
 	return func(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Importer, ocispecs.Descriptor, error) {
-		return &importer{}, ocispecs.Descriptor{}, nil
+		config, err := getConfig(attrs)
+		if err != nil {
+			return nil, ocispecs.Descriptor{}, err
+		}
+		return &importer{config}, ocispecs.Descriptor{}, nil
 	}
 }
 
-type importer struct{}
+type importer struct {
+	config Config
+}
 
 func (i *importer) Resolve(ctx context.Context, desc ocispecs.Descriptor, id string, w worker.Worker) (solver.CacheManager, error) {
-	return &cacheManager{id: id}, nil
+	return &cacheManager{
+		id:     id,
+		config: i.config,
+	}, nil
 }
 
 type cacheManager struct {
-	id string
+	id     string
+	config Config
 }
 
 func (cm *cacheManager) ID() string {
@@ -85,7 +95,8 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 		return nil, err
 	}
 
-	hreq, _ := http.NewRequest("GET", "http://localhost:8080", bytes.NewReader(body))
+	url := fmt.Sprintf("%s/query", cm.config.EndpointURL)
+	hreq, _ := http.NewRequest("POST", url, bytes.NewReader(body))
 	hreq.Header.Set("Content-Type", "application/json")
 	hreq.Header.Set("Accept", "application/json")
 

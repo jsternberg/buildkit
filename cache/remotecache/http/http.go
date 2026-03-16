@@ -3,7 +3,27 @@ package http
 import (
 	"github.com/moby/buildkit/solver"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 )
+
+const (
+	attrEndpointURL = "endpoint_url"
+)
+
+type Config struct {
+	EndpointURL string
+}
+
+func getConfig(attrs map[string]string) (Config, error) {
+	endpointURL, ok := attrs[attrEndpointURL]
+	if !ok {
+		return Config{}, errors.Errorf("endpoint_url not set for http cache")
+	}
+
+	return Config{
+		EndpointURL: endpointURL,
+	}, nil
+}
 
 type QueryRequest struct {
 	Inputs      []CacheKeyWithSelector `json:"inputs"`

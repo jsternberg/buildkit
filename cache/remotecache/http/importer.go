@@ -107,7 +107,8 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 	defer resp.Body.Close()
 
 	if resp.StatusCode/100 != 2 {
-		return nil, errors.Errorf("unexpected http status code %s", resp.Status)
+		msg, _ := io.ReadAll(resp.Body)
+		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
 	}
 
 	dt, err := io.ReadAll(resp.Body)

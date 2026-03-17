@@ -51,9 +51,8 @@ func (cm *cacheManager) ID() string {
 
 func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
 	req := &QueryRequest{
-		Digest:      dgst,
-		InputIndex:  inputIndex,
-		OutputIndex: outputIndex,
+		Digest:     outputKey(dgst, int(outputIndex)),
+		InputIndex: inputIndex,
 	}
 
 	m := map[string]int{}
@@ -133,4 +132,8 @@ func (cm *cacheManager) Save(key *solver.CacheKey, s solver.Result, createdAt ti
 
 func (cm *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
 	return nil
+}
+
+func outputKey(dgst digest.Digest, idx int) digest.Digest {
+	return digest.FromBytes(fmt.Appendf(nil, "%s@%d", dgst, idx))
 }

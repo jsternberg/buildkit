@@ -26,11 +26,10 @@ func getConfig(attrs map[string]string) (Config, error) {
 }
 
 type QueryRequest struct {
-	Inputs      []CacheKeyWithSelector `json:"inputs,omitempty"`
-	Digest      digest.Digest          `json:"digest"`
-	InputIndex  solver.Index           `json:"input_index"`
-	OutputIndex solver.Index           `json:"output_index"`
-	CacheKeys   []*CacheKey            `json:"cache_keys,omitempty"`
+	Inputs     []CacheKeyWithSelector `json:"inputs,omitempty"`
+	Digest     digest.Digest          `json:"digest"`
+	InputIndex solver.Index           `json:"input_index"`
+	CacheKeys  []*CacheKey            `json:"cache_keys,omitempty"`
 }
 
 type CacheKeyWithSelector struct {

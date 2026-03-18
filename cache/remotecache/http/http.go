@@ -32,6 +32,10 @@ type QueryRequest struct {
 	CacheKeys  []*CacheKey            `json:"cache_keys,omitempty"`
 }
 
+type QueryResponse struct {
+	CacheKeys []string `json:"cache_keys"`
+}
+
 type CacheKeyWithSelector struct {
 	CacheKey int           `json:"index"`
 	Selector digest.Digest `json:"selector,omitempty"`

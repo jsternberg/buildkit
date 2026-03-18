@@ -110,12 +110,21 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
 	}
 
-	dt, err := io.ReadAll(resp.Body)
-	if err != nil {
+	dt, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(dt))
+
+	var queryResp QueryResponse
+	if err := json.NewDecoder(bytes.NewReader(dt)).Decode(&queryResp); err != nil {
 		return nil, err
 	}
-	fmt.Println(string(dt))
-	return nil, nil
+
+	keys := make([]*solver.CacheKey, 0, len(queryResp.CacheKeys))
+	for _, ck := range queryResp.CacheKeys {
+		newKey := solver.NewCacheKey(dgst, "", outputIndex)
+		newKey.ID = ck
+		keys = append(keys, newKey)
+	}
+	return keys, nil
 }
 
 func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.CacheRecord, error) {

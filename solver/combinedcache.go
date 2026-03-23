@@ -2,10 +2,14 @@ package solver
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/moby/buildkit/util/bklog"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -52,12 +56,25 @@ func (cm *combinedCacheManager) Query(inp []CacheKeyWithSelector, inputIndex Ind
 	for _, c := range cm.cms {
 		func(c CacheManager) {
 			eg.Go(func() error {
+				dt, _ := json.Marshal(inp)
+				bklog.G(context.TODO()).Debugf("cm %s: query for %v %d %s", c.ID(), string(dt), inputIndex, rootKey(dgst, outputIndex))
+
 				recs, err := c.Query(inp, inputIndex, dgst, outputIndex)
 				if err != nil {
 					return err
 				}
+
+				names := make([]string, len(recs))
+				for i, r := range recs {
+					names[i] = r.ID
+				}
+				bklog.G(context.TODO()).Debugf("cm %s: records returned %d %v", c.ID(), len(recs), names)
 				mu.Lock()
 				for _, r := range recs {
+					if _, ok := r.ids[c]; !ok {
+						r.ids[c] = r.ID
+					}
+
 					if _, ok := keys[r.ID]; !ok || c == cm.main {
 						keys[r.ID] = r
 					}
@@ -76,14 +93,31 @@ func (cm *combinedCacheManager) Query(inp []CacheKeyWithSelector, inputIndex Ind
 	for _, k := range keys {
 		out = append(out, k)
 	}
+
+	names := make([]string, 0, len(out))
+	for _, k := range out {
+		names = append(names, k.ID)
+	}
+	fmt.Printf("combined query results: %v\n", names)
+	debug.PrintStack()
 	return out, nil
 }
 
 func (cm *combinedCacheManager) Load(ctx context.Context, rec *CacheRecord) (res Result, err error) {
-	results, err := rec.cacheManager.LoadWithParents(ctx, rec)
-	if err != nil {
-		return nil, err
+	var results []LoadedResult
+	if cm, ok := rec.cacheManager.(*cacheManager); ok {
+		results, err = cm.LoadWithParents(ctx, rec)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		res, err := rec.cacheManager.Load(ctx, rec)
+		if err != nil {
+			return nil, err
+		}
+		results = []LoadedResult{{Result: res, CacheKey: rec.key, CacheResult: CacheResult{ID: rec.ID, CreatedAt: rec.CreatedAt}}}
 	}
+
 	defer func() {
 		ctx := context.WithoutCancel(ctx)
 		for i, res := range results {
@@ -114,13 +148,15 @@ func (cm *combinedCacheManager) Save(key *CacheKey, s Result, createdAt time.Tim
 }
 
 func (cm *combinedCacheManager) Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error) {
+	fmt.Println("combined cache records:", ck.ID)
+
 	ck.mu.RLock()
 	if len(ck.ids) == 0 {
 		ck.mu.RUnlock()
 		return nil, errors.Errorf("no results")
 	}
 
-	cms := make([]*cacheManager, 0, len(ck.ids))
+	cms := make([]CacheManager, 0, len(ck.ids))
 	for cm := range ck.ids {
 		cms = append(cms, cm)
 	}
@@ -138,6 +174,7 @@ func (cm *combinedCacheManager) Records(ctx context.Context, ck *CacheKey) ([]*C
 			}
 			mu.Lock()
 			for _, rec := range recs {
+				rec.cacheManager = c
 				if _, ok := records[rec.ID]; !ok || c == cm.main {
 					if c == cm.main {
 						rec.Priority = 1

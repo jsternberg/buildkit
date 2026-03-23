@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"runtime/debug"
 	"time"
 
 	"github.com/moby/buildkit/cache/remotecache"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver"
+	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/worker"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -63,13 +66,16 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 		req.Inputs = append(req.Inputs, input)
 	}
 
+	dt, _ := json.Marshal(req)
+	fmt.Println("query request:", string(dt))
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/query", cm.config.EndpointURL)
-	hreq, _ := http.NewRequest("POST", url, bytes.NewReader(body))
+	urlStr := fmt.Sprintf("%s/query", cm.config.EndpointURL)
+	hreq, _ := http.NewRequest("POST", urlStr, bytes.NewReader(body))
 	hreq.Header.Set("Content-Type", "application/json")
 	hreq.Header.Set("Accept", "application/json")
 
@@ -84,8 +90,9 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
 	}
 
-	dt, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(dt))
+	dt, _ = io.ReadAll(resp.Body)
+	fmt.Println("query response:", string(dt))
+	debug.PrintStack()
 
 	var queryResp QueryResponse
 	if err := json.NewDecoder(bytes.NewReader(dt)).Decode(&queryResp); err != nil {
@@ -102,11 +109,53 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 }
 
 func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.CacheRecord, error) {
-	return nil, nil
+	urlStr := fmt.Sprintf("%s/records", cm.config.EndpointURL)
+	hreq, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	params := url.Values{}
+	params.Set("q", ck.ID)
+	hreq.URL.RawQuery = params.Encode()
+	hreq.Header.Set("Accept", "application/json")
+
+	bklog.G(ctx).Infof("sending request to %s", hreq.URL.String())
+	resp, err := http.DefaultClient.Do(hreq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(resp.Body)
+		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
+	}
+
+	dt, _ := io.ReadAll(resp.Body)
+	fmt.Println("records:", string(dt))
+
+	var recordsResp RecordsResponse
+	if err := json.NewDecoder(bytes.NewReader(dt)).Decode(&recordsResp); err != nil {
+		return nil, err
+	}
+
+	records := make([]*solver.CacheRecord, 0, len(recordsResp.Records))
+	for _, r := range recordsResp.Records {
+		var createdAt time.Time
+		if r.CreatedAt != nil {
+			createdAt = *r.CreatedAt
+		}
+		records = append(records, &solver.CacheRecord{
+			ID:        r.ID,
+			CreatedAt: createdAt,
+		})
+	}
+	return records, nil
 }
 
 func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solver.Result, error) {
-	return nil, nil
+	return nil, errors.New("implement me")
 }
 
 func (cm *cacheManager) Save(key *solver.CacheKey, s solver.Result, createdAt time.Time) (*solver.ExportableCacheKey, error) {

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"time"
+
 	"github.com/moby/buildkit/solver"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -33,6 +35,15 @@ type QueryRequest struct {
 
 type QueryResponse struct {
 	CacheKeys []string `json:"cache_keys"`
+}
+
+type RecordsResponse struct {
+	Records []Record `json:"records"`
+}
+
+type Record struct {
+	ID        string     `json:"id"`
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
 }
 
 type CacheKeyWithSelector struct {

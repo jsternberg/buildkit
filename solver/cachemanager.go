@@ -349,7 +349,7 @@ func (c *cacheManager) Save(k *CacheKey, r Result, createdAt time.Time) (rck *Ex
 }
 
 func newKey() *CacheKey {
-	return &CacheKey{ids: map[*cacheManager]string{}}
+	return &CacheKey{ids: map[CacheManager]string{}}
 }
 
 func (c *cacheManager) newKeyWithID(id string, dgst digest.Digest, output Index) *CacheKey {

@@ -15,7 +15,7 @@ func NewCacheKey(dgst, vtx digest.Digest, output Index) *CacheKey {
 		digest: dgst,
 		vtx:    vtx,
 		output: output,
-		ids:    map[*cacheManager]string{},
+		ids:    map[CacheManager]string{},
 	}
 }
 
@@ -42,7 +42,7 @@ type CacheKey struct {
 	// vtx is the LLB digest that this op was created for
 	vtx    digest.Digest
 	output Index
-	ids    map[*cacheManager]string
+	ids    map[CacheManager]string
 
 	indexIDs []string
 }
@@ -89,6 +89,7 @@ func (ck *CacheKey) Deps() [][]CacheKeyWithSelector {
 func (ck *CacheKey) Digest() digest.Digest {
 	return ck.digest
 }
+
 func (ck *CacheKey) Output() Index {
 	return ck.output
 }
@@ -100,7 +101,7 @@ func (ck *CacheKey) clone() *CacheKey {
 		digest: ck.digest,
 		vtx:    ck.vtx,
 		output: ck.output,
-		ids:    make(map[*cacheManager]string, len(ck.ids)),
+		ids:    make(map[CacheManager]string, len(ck.ids)),
 	}
 	maps.Copy(nk.ids, ck.ids)
 	ck.mu.RUnlock()

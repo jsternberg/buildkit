@@ -158,73 +158,74 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 				break
 			}
 		}
-		cm := v.cacheManager
-		key := cm.getID(v.key)
-		res, err := cm.backend.Load(key, v.ID)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				v = nil
-				continue
+		if cm, ok := v.cacheManager.(*cacheManager); ok {
+			key := cm.getID(v.key)
+			res, err := cm.backend.Load(key, v.ID)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					v = nil
+					continue
+				}
+				return nil, err
 			}
-			return nil, err
-		}
 
-		remotes, err := cm.results.LoadRemotes(ctx, res, opt.CompressionOpt, opt.Session)
-		if err != nil {
-			return nil, err
-		}
-		if len(remotes) > 0 {
-			remote, remotes = remotes[0], remotes[1:] // pop the first element
-		}
-		if opt.CompressionOpt != nil {
-			for _, r := range remotes { // record all remaining remotes as well
+			remotes, err := cm.results.LoadRemotes(ctx, res, opt.CompressionOpt, opt.Session)
+			if err != nil {
+				return nil, err
+			}
+			if len(remotes) > 0 {
+				remote, remotes = remotes[0], remotes[1:] // pop the first element
+			}
+			if opt.CompressionOpt != nil {
+				for _, r := range remotes { // record all remaining remotes as well
+					results = append(results, CacheExportResult{
+						CreatedAt:  v.CreatedAt,
+						Result:     r,
+						EdgeVertex: k.vtx,
+						EdgeIndex:  k.output,
+					})
+				}
+			}
+
+			if (remote == nil || opt.CompressionOpt != nil) && opt.Mode != CacheExportModeRemoteOnly {
+				res, err := cm.results.Load(ctx, res)
+				if err != nil {
+					if !errors.Is(err, cerrdefs.ErrNotFound) {
+						return nil, err
+					}
+					remote = nil
+				} else {
+					remotes, err := opt.ResolveRemotes(ctx, res)
+					if err != nil {
+						return nil, err
+					}
+					res.Release(context.TODO())
+					if remote == nil && len(remotes) > 0 {
+						remote, remotes = remotes[0], remotes[1:] // pop the first element
+					}
+					if opt.CompressionOpt != nil {
+						for _, r := range remotes { // record all remaining remotes as well
+							results = append(results, CacheExportResult{
+								CreatedAt:  v.CreatedAt,
+								Result:     r,
+								EdgeVertex: k.vtx,
+								EdgeIndex:  k.output,
+							})
+						}
+					}
+				}
+			}
+
+			if remote != nil {
 				results = append(results, CacheExportResult{
 					CreatedAt:  v.CreatedAt,
-					Result:     r,
+					Result:     remote,
 					EdgeVertex: k.vtx,
 					EdgeIndex:  k.output,
 				})
 			}
+			break
 		}
-
-		if (remote == nil || opt.CompressionOpt != nil) && opt.Mode != CacheExportModeRemoteOnly {
-			res, err := cm.results.Load(ctx, res)
-			if err != nil {
-				if !errors.Is(err, cerrdefs.ErrNotFound) {
-					return nil, err
-				}
-				remote = nil
-			} else {
-				remotes, err := opt.ResolveRemotes(ctx, res)
-				if err != nil {
-					return nil, err
-				}
-				res.Release(context.TODO())
-				if remote == nil && len(remotes) > 0 {
-					remote, remotes = remotes[0], remotes[1:] // pop the first element
-				}
-				if opt.CompressionOpt != nil {
-					for _, r := range remotes { // record all remaining remotes as well
-						results = append(results, CacheExportResult{
-							CreatedAt:  v.CreatedAt,
-							Result:     r,
-							EdgeVertex: k.vtx,
-							EdgeIndex:  k.output,
-						})
-					}
-				}
-			}
-		}
-
-		if remote != nil {
-			results = append(results, CacheExportResult{
-				CreatedAt:  v.CreatedAt,
-				Result:     remote,
-				EdgeVertex: k.vtx,
-				EdgeIndex:  k.output,
-			})
-		}
-		break
 	}
 
 	if remote != nil && opt.Mode == CacheExportModeMin {
@@ -259,9 +260,11 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 
 	if !opt.IgnoreBacklinks {
 		for cm, id := range k.ids {
-			_, err := addBacklinks(t, cm, id, bkm)
-			if err != nil {
-				return nil, err
+			if cm, ok := cm.(*cacheManager); ok {
+				_, err := addBacklinks(t, cm, id, bkm)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -275,29 +278,30 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 	}
 
 	if v != nil && len(deps) == 0 {
-		cm := v.cacheManager
-		key := cm.getID(v.key)
-		if err := cm.backend.WalkIDsByResult(v.ID, func(id string) error {
-			if id == key {
-				return nil
-			}
-			hasBacklinks := false
-			cm.backend.WalkBacklinks(id, func(id string, link CacheInfoLink) error {
-				hasBacklinks = true
-				return nil
-			})
-			if hasBacklinks {
-				return nil
-			}
+		if cm, ok := v.cacheManager.(*cacheManager); ok {
+			key := cm.getID(v.key)
+			if err := cm.backend.WalkIDsByResult(v.ID, func(id string) error {
+				if id == key {
+					return nil
+				}
+				hasBacklinks := false
+				cm.backend.WalkBacklinks(id, func(id string, link CacheInfoLink) error {
+					hasBacklinks = true
+					return nil
+				})
+				if hasBacklinks {
+					return nil
+				}
 
-			dgst, err := digest.Parse(id)
-			if err != nil {
-				return nil
+				dgst, err := digest.Parse(id)
+				if err != nil {
+					return nil
+				}
+				_, _, err = t.Add(dgst, nil, results)
+				return err
+			}); err != nil {
+				return nil, err
 			}
-			_, _, err = t.Add(dgst, nil, results)
-			return err
-		}); err != nil {
-			return nil, err
 		}
 	}
 

@@ -2,6 +2,8 @@ package solver
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -212,6 +214,7 @@ func (e *edge) probeCache(d *dep, depKeys []CacheKeyWithSelector) bool {
 			found = true
 		}
 	}
+	bklog.G(context.TODO()).Debugf("probe cache key map: %v %v", slices.Collect(maps.Keys(d.keyMap)), found)
 	return found
 }
 
@@ -467,12 +470,14 @@ func (e *edge) recalcCurrentState() {
 			}
 		}
 
+		bklog.G(context.TODO()).Debugf("retrieving cache records for merged key: %s", mergedKey.ID)
 		records, err := e.op.Cache().Records(context.Background(), mergedKey)
 		if err != nil {
 			bklog.G(context.TODO()).Errorf("error receiving cache records: %v", err)
 			continue
 		}
 
+		bklog.G(context.TODO()).Debugf("cache records returned %d", len(records))
 		for _, r := range records {
 			if _, ok := e.cacheRecordsLoaded[r.ID]; !ok {
 				e.cacheRecords[r.ID] = r

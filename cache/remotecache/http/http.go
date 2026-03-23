@@ -29,7 +29,6 @@ type QueryRequest struct {
 	Inputs     []CacheKeyWithSelector `json:"inputs,omitempty"`
 	Digest     digest.Digest          `json:"digest"`
 	InputIndex solver.Index           `json:"input_index"`
-	CacheKeys  []*CacheKey            `json:"cache_keys,omitempty"`
 }
 
 type QueryResponse struct {
@@ -37,7 +36,7 @@ type QueryResponse struct {
 }
 
 type CacheKeyWithSelector struct {
-	CacheKey int           `json:"index"`
+	CacheKey string        `json:"id"`
 	Selector digest.Digest `json:"selector,omitempty"`
 }
 

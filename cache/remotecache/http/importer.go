@@ -55,35 +55,9 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 		InputIndex: inputIndex,
 	}
 
-	m := map[string]int{}
-	var getCacheKeyIndex func(k *solver.CacheKey) int
-	getCacheKeyIndex = func(k *solver.CacheKey) int {
-		if index, ok := m[k.ID]; ok {
-			return index
-		}
-
-		depKey := &CacheKey{
-			ID: k.ID,
-		}
-		for _, dep := range k.Deps() {
-			inpDeps := make([]CacheKeyWithSelector, 0, len(dep))
-			for _, d := range dep {
-				inpDeps = append(inpDeps, CacheKeyWithSelector{
-					CacheKey: getCacheKeyIndex(d.CacheKey.CacheKey),
-					Selector: d.Selector,
-				})
-			}
-			depKey.Deps = append(depKey.Deps, inpDeps)
-		}
-
-		m[k.ID] = len(req.CacheKeys)
-		req.CacheKeys = append(req.CacheKeys, depKey)
-		return len(req.CacheKeys) - 1
-	}
-
 	for _, ck := range inp {
 		input := CacheKeyWithSelector{
-			CacheKey: getCacheKeyIndex(ck.CacheKey.CacheKey),
+			CacheKey: ck.CacheKey.ID,
 			Selector: ck.Selector,
 		}
 		req.Inputs = append(req.Inputs, input)

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/moby/buildkit/solver"
@@ -9,11 +10,13 @@ import (
 )
 
 const (
-	attrEndpointURL = "endpoint_url"
+	attrEndpointURL       = "endpoint_url"
+	attrUploadParallelism = "upload_parallelism"
 )
 
 type Config struct {
-	EndpointURL string
+	EndpointURL       string
+	UploadParallelism int
 }
 
 func getConfig(attrs map[string]string) (Config, error) {
@@ -22,8 +25,22 @@ func getConfig(attrs map[string]string) (Config, error) {
 		return Config{}, errors.Errorf("endpoint_url not set for http cache")
 	}
 
+	uploadParallelism := 4
+	uploadParallelismStr, ok := attrs[attrUploadParallelism]
+	if ok {
+		uploadParallelismInt, err := strconv.Atoi(uploadParallelismStr)
+		if err != nil {
+			return Config{}, errors.Errorf("upload_parallelism must be a positive integer")
+		}
+		if uploadParallelismInt <= 0 {
+			return Config{}, errors.Errorf("upload_parallelism must be a positive integer")
+		}
+		uploadParallelism = uploadParallelismInt
+	}
+
 	return Config{
-		EndpointURL: endpointURL,
+		EndpointURL:       endpointURL,
+		UploadParallelism: uploadParallelism,
 	}, nil
 }
 

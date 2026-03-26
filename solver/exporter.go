@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/moby/buildkit/util/bklog"
 	digest "github.com/opencontainers/go-digest"
 )
 
@@ -138,6 +139,7 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 		exportRecord = true
 	}
 
+	bklog.G(ctx).Infof("cloning records of size %d", len(e.records))
 	records := slices.Clone(e.records)
 	slices.SortStableFunc(records, compareCacheRecord)
 
@@ -149,7 +151,9 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 		ctx = e.recordCtxOpts(ctx)
 	}
 	v := e.record
+	bklog.G(ctx).Info("starting export record loop")
 	for exportRecord && addRecord {
+		bklog.G(ctx).Infof("value is %#v", v)
 		if v == nil {
 			if i < len(records) {
 				v = records[i]
@@ -158,75 +162,81 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 				break
 			}
 		}
-		if cm, ok := v.cacheManager.(*cacheManager); ok {
-			key := cm.getID(v.key)
-			res, err := cm.backend.Load(key, v.ID)
-			if err != nil {
-				if errors.Is(err, ErrNotFound) {
-					v = nil
-					continue
-				}
-				return nil, err
-			}
 
-			remotes, err := cm.results.LoadRemotes(ctx, res, opt.CompressionOpt, opt.Session)
-			if err != nil {
-				return nil, err
-			}
-			if len(remotes) > 0 {
-				remote, remotes = remotes[0], remotes[1:] // pop the first element
-			}
-			if opt.CompressionOpt != nil {
-				for _, r := range remotes { // record all remaining remotes as well
-					results = append(results, CacheExportResult{
-						CreatedAt:  v.CreatedAt,
-						Result:     r,
-						EdgeVertex: k.vtx,
-						EdgeIndex:  k.output,
-					})
-				}
-			}
+		cm, ok := v.cacheManager.(*cacheManager)
+		if !ok {
+			break
+		}
 
-			if (remote == nil || opt.CompressionOpt != nil) && opt.Mode != CacheExportModeRemoteOnly {
-				res, err := cm.results.Load(ctx, res)
-				if err != nil {
-					if !errors.Is(err, cerrdefs.ErrNotFound) {
-						return nil, err
-					}
-					remote = nil
-				} else {
-					remotes, err := opt.ResolveRemotes(ctx, res)
-					if err != nil {
-						return nil, err
-					}
-					res.Release(context.TODO())
-					if remote == nil && len(remotes) > 0 {
-						remote, remotes = remotes[0], remotes[1:] // pop the first element
-					}
-					if opt.CompressionOpt != nil {
-						for _, r := range remotes { // record all remaining remotes as well
-							results = append(results, CacheExportResult{
-								CreatedAt:  v.CreatedAt,
-								Result:     r,
-								EdgeVertex: k.vtx,
-								EdgeIndex:  k.output,
-							})
-						}
-					}
-				}
+		bklog.G(ctx).Info("this is a normal cache manager")
+		key := cm.getID(v.key)
+		res, err := cm.backend.Load(key, v.ID)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				v = nil
+				continue
 			}
+			return nil, err
+		}
 
-			if remote != nil {
+		remotes, err := cm.results.LoadRemotes(ctx, res, opt.CompressionOpt, opt.Session)
+		if err != nil {
+			return nil, err
+		}
+		if len(remotes) > 0 {
+			remote, remotes = remotes[0], remotes[1:] // pop the first element
+		}
+		if opt.CompressionOpt != nil {
+			for _, r := range remotes { // record all remaining remotes as well
 				results = append(results, CacheExportResult{
 					CreatedAt:  v.CreatedAt,
-					Result:     remote,
+					Result:     r,
 					EdgeVertex: k.vtx,
 					EdgeIndex:  k.output,
 				})
 			}
-			break
 		}
+
+		if (remote == nil || opt.CompressionOpt != nil) && opt.Mode != CacheExportModeRemoteOnly {
+			res, err := cm.results.Load(ctx, res)
+			if err != nil {
+				if !errors.Is(err, cerrdefs.ErrNotFound) {
+					return nil, err
+				}
+				remote = nil
+			} else {
+				remotes, err := opt.ResolveRemotes(ctx, res)
+				if err != nil {
+					return nil, err
+				}
+				res.Release(context.TODO())
+				if remote == nil && len(remotes) > 0 {
+					remote, remotes = remotes[0], remotes[1:] // pop the first element
+				}
+				if opt.CompressionOpt != nil {
+					for _, r := range remotes { // record all remaining remotes as well
+						results = append(results, CacheExportResult{
+							CreatedAt:  v.CreatedAt,
+							Result:     r,
+							EdgeVertex: k.vtx,
+							EdgeIndex:  k.output,
+						})
+					}
+				}
+			}
+		}
+
+		if remote != nil {
+			results = append(results, CacheExportResult{
+				CreatedAt:  v.CreatedAt,
+				Result:     remote,
+				EdgeVertex: k.vtx,
+				EdgeIndex:  k.output,
+			})
+		}
+		break
 	}
+	bklog.G(ctx).Info("moving past to a new section")
 
 	if remote != nil && opt.Mode == CacheExportModeMin {
 		opt.Mode = CacheExportModeRemoteOnly

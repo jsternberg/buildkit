@@ -166,6 +166,7 @@ func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solv
 	if err != nil {
 		return nil, err
 	}
+	bklog.G(ctx).Infof("loading cache record %s with %d layers", rec.ID, len(layers))
 
 	mp := contentutil.NewMultiProvider(nil)
 	remote := &solver.Remote{}

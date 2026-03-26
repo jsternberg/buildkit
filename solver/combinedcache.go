@@ -130,8 +130,10 @@ func (cm *combinedCacheManager) Load(ctx context.Context, rec *CacheRecord) (res
 	if rec.cacheManager != cm.main && cm.main != nil {
 		for _, res := range results {
 			bklog.G(ctx).Infof("saving %s to main cache with cache key %s", res.Result.ID(), res.CacheKey.ID)
-			if _, err := cm.main.Save(res.CacheKey, res.Result, res.CacheResult.CreatedAt); err != nil {
+			if ck, err := cm.main.Save(res.CacheKey, res.Result, res.CacheResult.CreatedAt); err != nil {
 				return nil, err
+			} else {
+				bklog.G(ctx).Infof("saved as %s", ck.ID)
 			}
 		}
 	}

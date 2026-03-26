@@ -956,6 +956,7 @@ func (e *edge) loadCache(ctx context.Context) (any, error) {
 		bklog.G(ctx).Debugf("load cache for %s err: %v", e.edge.Vertex.Name(), err)
 		return nil, errors.Wrap(err, "failed to load cache")
 	}
+	bklog.G(ctx).Debugf("load cache for %s success", e.edge.Vertex.Name())
 
 	return NewCachedResult(res, []ExportableCacheKey{{CacheKey: rec.key, Exporter: &exporter{k: rec.key, record: rec, edge: e, recordCtxOpts: ctxOpts}}}), nil
 }

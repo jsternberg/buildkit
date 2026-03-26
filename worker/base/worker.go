@@ -572,6 +572,7 @@ func (w *Worker) Exporter(name string, sm *session.Manager) (exporter.Exporter, 
 }
 
 func (w *Worker) FromRemote(ctx context.Context, remote *solver.Remote) (ref cache.ImmutableRef, err error) {
+	bklog.G(ctx).Infof("worker from remote %d", len(remote.Descriptors))
 	if len(remote.Descriptors) > 0 {
 		var eg errgroup.Group
 		for _, desc := range remote.Descriptors {
@@ -628,6 +629,7 @@ func (w *Worker) FromRemote(ctx context.Context, remote *solver.Remote) (ref cac
 		if v, ok := desc.Annotations["buildkit/description"]; ok {
 			descr = v
 		}
+		bklog.G(ctx).Infof("%s", descr)
 		opts := []cache.RefOption{
 			cache.WithDescription(descr),
 			cache.WithCreationTime(tm),
@@ -636,6 +638,7 @@ func (w *Worker) FromRemote(ctx context.Context, remote *solver.Remote) (ref cac
 		if ul, ok := remote.Provider.(interface {
 			UnlazySession(ocispecs.Descriptor) session.Group
 		}); ok {
+			bklog.G(ctx).Info("provider supports unlazy session")
 			s := ul.UnlazySession(desc)
 			if s != nil {
 				opts = append(opts, cache.Unlazy(s))

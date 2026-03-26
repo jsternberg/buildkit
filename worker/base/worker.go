@@ -576,10 +576,9 @@ func (w *Worker) FromRemote(ctx context.Context, remote *solver.Remote) (ref cac
 		var eg errgroup.Group
 		for _, desc := range remote.Descriptors {
 			eg.Go(func() error {
-				if _, err := remote.Provider.Info(ctx, desc.Digest); err != nil {
-					return err
-				}
-				return nil
+				_, err := remote.Provider.Info(ctx, desc.Digest)
+				bklog.G(ctx).Infof("remote provider info error: %#v", err)
+				return err
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -651,6 +650,7 @@ func (w *Worker) FromRemote(ctx context.Context, remote *solver.Remote) (ref cac
 		if current != nil {
 			current.Release(context.TODO())
 		}
+		bklog.G(ctx).Infof("get by blob %#v %#v", ref, err)
 		if err != nil {
 			return nil, err
 		}
@@ -667,7 +667,7 @@ func ID(root string) (string, error) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			id := identity.NewID()
-			err := os.WriteFile(f, []byte(id), 0400)
+			err := os.WriteFile(f, []byte(id), 0o400)
 			return id, err
 		}
 		return "", err

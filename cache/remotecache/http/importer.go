@@ -11,10 +11,15 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/pkg/labels"
 	"github.com/moby/buildkit/cache/remotecache"
+	cacheimport "github.com/moby/buildkit/cache/remotecache/v1"
+	cacheimporttypes "github.com/moby/buildkit/cache/remotecache/v1/types"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver"
 	"github.com/moby/buildkit/util/bklog"
+	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/worker"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -40,12 +45,14 @@ func (i *importer) Resolve(ctx context.Context, desc ocispecs.Descriptor, id str
 	return &cacheManager{
 		id:     id,
 		config: i.config,
+		w:      w,
 	}, nil
 }
 
 type cacheManager struct {
 	id     string
 	config Config
+	w      worker.Worker
 }
 
 func (cm *cacheManager) ID() string {
@@ -155,11 +162,86 @@ func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*so
 }
 
 func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solver.Result, error) {
-	return nil, errors.New("implement me")
+	layers, err := cm.loadManifest(ctx, rec)
+	if err != nil {
+		return nil, err
+	}
+
+	mp := contentutil.NewMultiProvider(nil)
+	remote := &solver.Remote{}
+	for _, l := range layers {
+		descPair := cacheimport.DescriptorProviderPair{
+			Descriptor: ocispecs.Descriptor{
+				MediaType: l.Annotations.MediaType,
+				Digest:    l.Blob,
+				Size:      l.Annotations.Size,
+				Annotations: map[string]string{
+					labels.LabelUncompressed: l.Annotations.DiffID.String(),
+				},
+			},
+			Provider: cm,
+		}
+		if !l.Annotations.CreatedAt.IsZero() {
+			txt, err := l.Annotations.CreatedAt.MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			descPair.Descriptor.Annotations["buildkit/createdat"] = string(txt)
+		}
+		remote.Descriptors = append(remote.Descriptors, descPair.Descriptor)
+		mp.Add(descPair.Descriptor.Digest, descPair)
+	}
+	remote.Provider = mp
+
+	bklog.G(ctx).Infof("constructed solver result for %s", rec.ID)
+	ref, err := cm.w.FromRemote(ctx, remote)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load result from remote")
+	}
+	bklog.G(ctx).Infof("immutable reference from remote: %#v", ref)
+	return worker.NewWorkerRefResult(ref, cm.w), nil
+}
+
+func (cm *cacheManager) loadManifest(ctx context.Context, rec *solver.CacheRecord) ([]*cacheimporttypes.CacheLayer, error) {
+	urlStr := fmt.Sprintf("%s/record", cm.config.EndpointURL)
+	hreq, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	params := url.Values{}
+	params.Set("q", rec.ID)
+	hreq.URL.RawQuery = params.Encode()
+	hreq.Header.Set("Accept", "application/json")
+
+	bklog.G(ctx).Infof("sending request to %s", hreq.URL.String())
+
+	resp, err := http.DefaultClient.Do(hreq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(resp.Body)
+		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
+	}
+
+	var recordResp RecordResponse
+	if err := json.NewDecoder(resp.Body).Decode(&recordResp); err != nil {
+		return nil, err
+	}
+	return recordResp.Layers, nil
+}
+
+func (cm *cacheManager) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) (content.ReaderAt, error) {
+	bklog.G(ctx).Info("attempted to call reader at but it hasn't been implemented yet")
+	debug.PrintStack()
+	return nil, errors.New("implement reader at")
 }
 
 func (cm *cacheManager) Save(key *solver.CacheKey, s solver.Result, createdAt time.Time) (*solver.ExportableCacheKey, error) {
-	return nil, nil
+	return nil, errors.Errorf("importer is immutable")
 }
 
 func (cm *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
@@ -168,4 +250,83 @@ func (cm *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
 
 func outputKey(dgst digest.Digest, idx int) digest.Digest {
 	return digest.FromBytes(fmt.Appendf(nil, "%s@%d", dgst, idx))
+}
+
+type ReaderAtCloser interface {
+	io.ReaderAt
+	io.Closer
+}
+
+type readerAtCloser struct {
+	offset int64
+	rc     io.ReadCloser
+	ra     io.ReaderAt
+	open   func(offset int64) (io.ReadCloser, error)
+	closed bool
+}
+
+func toReaderAtCloser(open func(offset int64) (io.ReadCloser, error)) ReaderAtCloser {
+	return &readerAtCloser{
+		open: open,
+	}
+}
+
+func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
+	if hrs.closed {
+		return 0, io.EOF
+	}
+
+	if hrs.ra != nil {
+		return hrs.ra.ReadAt(p, off)
+	}
+
+	if hrs.rc == nil || off != hrs.offset {
+		if hrs.rc != nil {
+			hrs.rc.Close()
+			hrs.rc = nil
+		}
+		rc, err := hrs.open(off)
+		if err != nil {
+			return 0, err
+		}
+		hrs.rc = rc
+	}
+	if ra, ok := hrs.rc.(io.ReaderAt); ok {
+		hrs.ra = ra
+		n, err = ra.ReadAt(p, off)
+	} else {
+		for {
+			var nn int
+			nn, err = hrs.rc.Read(p)
+			n += nn
+			p = p[nn:]
+			if nn == len(p) || err != nil {
+				break
+			}
+		}
+	}
+
+	hrs.offset += int64(n)
+	return
+}
+
+func (hrs *readerAtCloser) Close() error {
+	if hrs.closed {
+		return nil
+	}
+	hrs.closed = true
+	if hrs.rc != nil {
+		return hrs.rc.Close()
+	}
+
+	return nil
+}
+
+type readerAt struct {
+	ReaderAtCloser
+	size int64
+}
+
+func (r *readerAt) Size() int64 {
+	return r.size
 }

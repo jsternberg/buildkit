@@ -129,6 +129,7 @@ func (cm *combinedCacheManager) Load(ctx context.Context, rec *CacheRecord) (res
 	}()
 	if rec.cacheManager != cm.main && cm.main != nil {
 		for _, res := range results {
+			bklog.G(ctx).Infof("saving %s to main cache with cache key %s", res.Result.ID(), res.CacheKey.ID)
 			if _, err := cm.main.Save(res.CacheKey, res.Result, res.CacheResult.CreatedAt); err != nil {
 				return nil, err
 			}
@@ -137,6 +138,7 @@ func (cm *combinedCacheManager) Load(ctx context.Context, rec *CacheRecord) (res
 	if len(results) == 0 { // TODO: handle gracefully
 		return nil, errors.Errorf("failed to load deleted cache")
 	}
+	bklog.G(ctx).Info("successfully loaded cache record")
 	return results[0].Result, nil
 }
 
@@ -174,6 +176,7 @@ func (cm *combinedCacheManager) Records(ctx context.Context, ck *CacheKey) ([]*C
 			}
 			mu.Lock()
 			for _, rec := range recs {
+				rec.key = ck
 				rec.cacheManager = c
 				if _, ok := records[rec.ID]; !ok || c == cm.main {
 					if c == cm.main {

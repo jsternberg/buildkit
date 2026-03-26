@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	cacheimporttypes "github.com/moby/buildkit/cache/remotecache/v1/types"
 	"github.com/moby/buildkit/solver"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -56,6 +57,10 @@ type QueryResponse struct {
 
 type RecordsResponse struct {
 	Records []Record `json:"records"`
+}
+
+type RecordResponse struct {
+	Layers []*cacheimporttypes.CacheLayer `json:"layers"`
 }
 
 type Record struct {

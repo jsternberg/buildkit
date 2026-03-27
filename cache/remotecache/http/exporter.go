@@ -105,29 +105,23 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 				}
 
 				dgst := dgstPair.Descriptor.Digest
-				// exists, size, err := e.s3Client.exists(groupCtx, key)
-				// if err != nil {
-				// 	return errors.Wrapf(err, "failed to check file presence in cache")
-				// }
-				// if exists != nil {
-				// 	if time.Since(*exists) > e.config.TouchRefresh {
-				// 		err = e.s3Client.touch(groupCtx, key, size)
-				// 		if err != nil {
-				// 			return errors.Wrapf(err, "failed to touch file")
-				// 		}
-				// 	}
-				// } else {
-
-				layerDone := progress.OneOff(groupCtx, fmt.Sprintf("writing layer %s", blob))
-				ra, err := dgstPair.Provider.ReaderAt(groupCtx, dgstPair.Descriptor)
+				exists, err := e.exists(groupCtx, dgst)
 				if err != nil {
-					return layerDone(errors.Wrap(err, "error reading layer blob from provider"))
+					return errors.Wrapf(err, "failed to check file presence in cache")
 				}
-				defer ra.Close()
-				if err := e.uploadLayer(groupCtx, dgst, newSectionReader(ra, ra.Size())); err != nil {
-					return layerDone(errors.Wrap(err, "error writing layer blob"))
+
+				if !exists {
+					layerDone := progress.OneOff(groupCtx, fmt.Sprintf("writing layer %s", blob))
+					ra, err := dgstPair.Provider.ReaderAt(groupCtx, dgstPair.Descriptor)
+					if err != nil {
+						return layerDone(errors.Wrap(err, "error reading layer blob from provider"))
+					}
+					defer ra.Close()
+					if err := e.uploadLayer(groupCtx, dgst, newSectionReader(ra, ra.Size())); err != nil {
+						return layerDone(errors.Wrap(err, "error writing layer blob"))
+					}
+					layerDone(nil)
 				}
-				layerDone(nil)
 
 				la := &cacheimporttypes.LayerAnnotations{
 					DiffID:    diffID,
@@ -157,7 +151,10 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 	}
 
 	url := fmt.Sprintf("%s/export", e.config.EndpointURL)
-	hreq, _ := http.NewRequest("POST", url, bytes.NewReader(body))
+	hreq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
 	hreq.Header.Set("Content-Type", "application/json")
 	hreq.Header.Set("Accept", "application/json")
 
@@ -177,6 +174,27 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 		return nil, err
 	}
 	return attrs, nil
+}
+
+func (e *exporter) exists(ctx context.Context, dgst digest.Digest) (bool, error) {
+	urlStr := fmt.Sprintf("%s/blobs/sha256/%s", e.config.EndpointURL, dgst.Encoded())
+	req, err := http.NewRequestWithContext(ctx, "HEAD", urlStr, nil)
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	exists := resp.StatusCode/100 == 2
+	if !exists && resp.StatusCode != 404 {
+		msg, _ := io.ReadAll(resp.Body)
+		return false, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
+	}
+	return exists, nil
 }
 
 func (e *exporter) uploadLayer(ctx context.Context, dgst digest.Digest, body io.Reader) error {

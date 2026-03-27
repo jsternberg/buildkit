@@ -45,27 +45,25 @@ func (cm *combinedCacheManager) ReleaseUnreferenced(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (cm *combinedCacheManager) Query(inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error) {
-	eg, _ := errgroup.WithContext(context.TODO())
+func (cm *combinedCacheManager) Query(ctx context.Context, inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error) {
+	eg, _ := errgroup.WithContext(ctx)
 	keys := make(map[string]*CacheKey, len(cm.cms))
 	var mu sync.Mutex
 	for _, c := range cm.cms {
-		func(c CacheManager) {
-			eg.Go(func() error {
-				recs, err := c.Query(inp, inputIndex, dgst, outputIndex)
-				if err != nil {
-					return err
+		eg.Go(func() error {
+			recs, err := c.Query(ctx, inp, inputIndex, dgst, outputIndex)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			for _, r := range recs {
+				if _, ok := keys[r.ID]; !ok || c == cm.main {
+					keys[r.ID] = r
 				}
-				mu.Lock()
-				for _, r := range recs {
-					if _, ok := keys[r.ID]; !ok || c == cm.main {
-						keys[r.ID] = r
-					}
-				}
-				mu.Unlock()
-				return nil
-			})
-		}(c)
+			}
+			mu.Unlock()
+			return nil
+		})
 	}
 
 	if err := eg.Wait(); err != nil {

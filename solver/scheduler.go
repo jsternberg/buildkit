@@ -8,9 +8,12 @@ import (
 	"github.com/moby/buildkit/solver/internal/pipe"
 	"github.com/moby/buildkit/util/cond"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/trace"
 )
 
-func newScheduler(ef edgeFactory) *scheduler {
+const pkgpath = "github.com/moby/buildkit/solver"
+
+func newScheduler(ef edgeFactory, tp trace.TracerProvider) *scheduler {
 	s := &scheduler{
 		waitq:    map[*edge]struct{}{},
 		incoming: map[*edge][]*edgePipe{},
@@ -19,7 +22,8 @@ func newScheduler(ef edgeFactory) *scheduler {
 		stopped: make(chan struct{}),
 		closed:  make(chan struct{}),
 
-		ef: ef,
+		ef:     ef,
+		tracer: tp.Tracer(pkgpath),
 	}
 	s.cond = cond.NewStatefulCond(&s.mu)
 
@@ -38,7 +42,8 @@ type scheduler struct {
 	mu   sync.Mutex
 	muQ  sync.Mutex
 
-	ef edgeFactory
+	ef     edgeFactory
+	tracer trace.Tracer
 
 	waitq       map[*edge]struct{}
 	next        *dispatcher
@@ -70,11 +75,14 @@ func (s *scheduler) loop() {
 		s.mu.Unlock()
 	}()
 
+	const fname = "(*scheduler).loop"
+	ctx, span := s.tracer.Start(context.Background(), fname)
 	s.mu.Lock()
 	for {
 		select {
 		case <-s.stopped:
 			s.mu.Unlock()
+			span.End()
 			return
 		default:
 		}
@@ -89,15 +97,17 @@ func (s *scheduler) loop() {
 		}
 		s.muQ.Unlock()
 		if l == nil {
+			span.End()
 			s.cond.Wait()
+			ctx, span = s.tracer.Start(context.Background(), fname)
 			continue
 		}
-		s.dispatch(l.e)
+		s.dispatch(ctx, l.e)
 	}
 }
 
 // dispatch schedules an edge to be processed
-func (s *scheduler) dispatch(e *edge) {
+func (s *scheduler) dispatch(ctx context.Context, e *edge) {
 	inc := make([]pipeSender, len(s.incoming[e]))
 	for i, p := range s.incoming[e] {
 		inc[i] = p.Sender
@@ -122,7 +132,7 @@ func (s *scheduler) dispatch(e *edge) {
 
 	// unpark the edge
 	debugSchedulerPreUnpark(e, inc, updates, out)
-	e.unpark(inc, updates, out, pf)
+	e.unpark(ctx, s.tracer, inc, updates, out, pf)
 	debugSchedulerPostUnpark(e, inc)
 
 	// set up new requests that didn't complete/were added by this run

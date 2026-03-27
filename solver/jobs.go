@@ -353,13 +353,17 @@ type Job struct {
 }
 
 type SolverOpt struct {
-	ResolveOpFunc ResolveOpFunc
-	DefaultCache  CacheManager
+	ResolveOpFunc  ResolveOpFunc
+	DefaultCache   CacheManager
+	TracerProvider trace.TracerProvider
 }
 
 func NewSolver(opts SolverOpt) *Solver {
 	if opts.DefaultCache == nil {
 		opts.DefaultCache = NewInMemoryCacheManager()
+	}
+	if opts.TracerProvider == nil {
+		opts.TracerProvider = noop.NewTracerProvider()
 	}
 	jl := &Solver{
 		jobs:    make(map[string]*Job),
@@ -367,7 +371,7 @@ func NewSolver(opts SolverOpt) *Solver {
 		opts:    opts,
 		index:   newEdgeIndex(),
 	}
-	jl.s = newScheduler(jl)
+	jl.s = newScheduler(jl, opts.TracerProvider)
 	jl.updateCond = sync.NewCond(jl.mu.RLocker())
 	return jl
 }

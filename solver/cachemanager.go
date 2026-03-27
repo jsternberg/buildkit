@@ -12,6 +12,8 @@ import (
 	"github.com/moby/buildkit/util/cachedigest"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // NewInMemoryCacheManager creates a new in-memory cache manager
@@ -19,12 +21,20 @@ func NewInMemoryCacheManager() CacheManager {
 	return NewCacheManager(context.TODO(), identity.NewID(), NewInMemoryCacheStorage(), NewInMemoryResultStorage())
 }
 
+type CacheManagerOption interface {
+	apply(cm *cacheManager)
+}
+
 // NewCacheManager creates a new cache manager with specific storage backend
-func NewCacheManager(ctx context.Context, id string, storage CacheKeyStorage, results CacheResultStorage) CacheManager {
+func NewCacheManager(ctx context.Context, id string, storage CacheKeyStorage, results CacheResultStorage, opts ...CacheManagerOption) CacheManager {
 	cm := &cacheManager{
 		id:      id,
 		backend: storage,
 		results: results,
+	}
+
+	for _, opt := range opts {
+		opt.apply(cm)
 	}
 
 	if err := cm.ReleaseUnreferenced(ctx); err != nil {
@@ -40,6 +50,8 @@ type cacheManager struct {
 
 	backend CacheKeyStorage
 	results CacheResultStorage
+
+	tracer trace.Tracer
 }
 
 func (c *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
@@ -62,7 +74,19 @@ func (c *cacheManager) ID() string {
 	return c.id
 }
 
-func (c *cacheManager) Query(deps []CacheKeyWithSelector, input Index, dgst digest.Digest, output Index) (rcks []*CacheKey, rerr error) {
+func (c *cacheManager) Query(ctx context.Context, deps []CacheKeyWithSelector, input Index, dgst digest.Digest, output Index) (rcks []*CacheKey, rerr error) {
+	if c.tracer != nil {
+		var span trace.Span
+		ctx, span = c.tracer.Start(ctx, "(*cacheManager).Query",
+			trace.WithAttributes(
+				attribute.String("cache_manager", c.id),
+				attribute.Int("input", int(input)),
+				attribute.String("digest", dgst.String()),
+				attribute.Int("output", int(output)),
+			))
+		defer span.End()
+	}
+
 	depsField := make([]map[string]any, len(deps))
 	for i, dep := range deps {
 		depsField[i] = dep.TraceFields()
@@ -141,6 +165,15 @@ func (c *cacheManager) Query(deps []CacheKeyWithSelector, input Index, dgst dige
 }
 
 func (c *cacheManager) Records(ctx context.Context, ck *CacheKey) (rrecs []*CacheRecord, rerr error) {
+	if c.tracer != nil {
+		var span trace.Span
+		ctx, span = c.tracer.Start(ctx, "(*cacheManager).Records",
+			trace.WithAttributes(
+				attribute.String("cache_manager", c.id),
+			))
+		defer span.End()
+	}
+
 	lg := bklog.G(context.TODO()).WithFields(logrus.Fields{
 		"cache_manager": c.id,
 		"op":            "records",
@@ -454,4 +487,16 @@ func rootKey(dgst digest.Digest, output Index) digest.Digest {
 		return digest.Digest("random:" + dgst.Encoded())
 	}
 	return out
+}
+
+type cacheManagerOptionFunc func(cm *cacheManager)
+
+func (fn cacheManagerOptionFunc) apply(cm *cacheManager) {
+	fn(cm)
+}
+
+func WithTracerProvider(tp trace.TracerProvider) CacheManagerOption {
+	return cacheManagerOptionFunc(func(cm *cacheManager) {
+		cm.tracer = tp.Tracer(pkgpath)
+	})
 }

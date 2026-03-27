@@ -4,6 +4,9 @@ services:
     container_name: buildkit-dev
     build:
       context: ../..
+      args:
+        BUILDKITD_TAGS: 'sqlite'
+        CGO_ENABLED: 1
     image: moby/buildkit:local
     ports:
       - 127.0.0.1:5000:5000

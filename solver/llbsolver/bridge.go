@@ -293,12 +293,12 @@ func (lcm *lazyCacheManager) ID() string {
 	return lcm.id
 }
 
-func (lcm *lazyCacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
+func (lcm *lazyCacheManager) Query(ctx context.Context, inp []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
 	lcm.wait()
 	if lcm.main == nil {
 		return nil, nil
 	}
-	return lcm.main.Query(inp, inputIndex, dgst, outputIndex)
+	return lcm.main.Query(ctx, inp, inputIndex, dgst, outputIndex)
 }
 
 func (lcm *lazyCacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.CacheRecord, error) {

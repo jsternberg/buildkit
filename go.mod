@@ -47,6 +47,7 @@ require (
 	github.com/hiddeco/sshsig v0.2.0
 	github.com/in-toto/in-toto-golang v0.10.0
 	github.com/klauspost/compress v1.18.4
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/moby/go-archive v0.2.0

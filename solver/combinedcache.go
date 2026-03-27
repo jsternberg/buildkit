@@ -49,40 +49,38 @@ func (cm *combinedCacheManager) ReleaseUnreferenced(ctx context.Context) error {
 	return eg.Wait()
 }
 
-func (cm *combinedCacheManager) Query(inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error) {
-	eg, _ := errgroup.WithContext(context.TODO())
+func (cm *combinedCacheManager) Query(ctx context.Context, inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error) {
+	eg, _ := errgroup.WithContext(ctx)
 	keys := make(map[string]*CacheKey, len(cm.cms))
 	var mu sync.Mutex
 	for _, c := range cm.cms {
-		func(c CacheManager) {
-			eg.Go(func() error {
-				dt, _ := json.Marshal(inp)
-				bklog.G(context.TODO()).Debugf("cm %s: query for %v %d %s", c.ID(), string(dt), inputIndex, rootKey(dgst, outputIndex))
+		eg.Go(func() error {
+			dt, _ := json.Marshal(inp)
+			bklog.G(context.TODO()).Debugf("cm %s: query for %v %d %s", c.ID(), string(dt), inputIndex, rootKey(dgst, outputIndex))
 
-				recs, err := c.Query(inp, inputIndex, dgst, outputIndex)
-				if err != nil {
-					return err
+			recs, err := c.Query(ctx, inp, inputIndex, dgst, outputIndex)
+			if err != nil {
+				return err
+			}
+
+			names := make([]string, len(recs))
+			for i, r := range recs {
+				names[i] = r.ID
+			}
+			bklog.G(context.TODO()).Debugf("cm %s: records returned %d %v", c.ID(), len(recs), names)
+			mu.Lock()
+			for _, r := range recs {
+				if _, ok := r.ids[c]; !ok {
+					r.ids[c] = r.ID
 				}
 
-				names := make([]string, len(recs))
-				for i, r := range recs {
-					names[i] = r.ID
+				if _, ok := keys[r.ID]; !ok || c == cm.main {
+					keys[r.ID] = r
 				}
-				bklog.G(context.TODO()).Debugf("cm %s: records returned %d %v", c.ID(), len(recs), names)
-				mu.Lock()
-				for _, r := range recs {
-					if _, ok := r.ids[c]; !ok {
-						r.ids[c] = r.ID
-					}
-
-					if _, ok := keys[r.ID]; !ok || c == cm.main {
-						keys[r.ID] = r
-					}
-				}
-				mu.Unlock()
-				return nil
-			})
-		}(c)
+			}
+			mu.Unlock()
+			return nil
+		})
 	}
 
 	if err := eg.Wait(); err != nil {

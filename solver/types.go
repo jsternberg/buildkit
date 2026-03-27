@@ -279,7 +279,7 @@ type CacheManager interface {
 
 	// Query searches for cache paths from one cache key to the output of a
 	// possible match.
-	Query(inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
+	Query(ctx context.Context, inp []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
 	Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error)
 
 	// Load loads a cache record into a result reference.

@@ -44,7 +44,7 @@ func TestInMemoryCache(t *testing.T) {
 	cacheFoo, err := m.Save(NewCacheKey(dgst("foo"), "", 0), testResult("result0"), time.Now())
 	require.NoError(t, err)
 
-	keys, err := m.Query(nil, 0, dgst("foo"), 0)
+	keys, err := m.Query(ctx, nil, 0, dgst("foo"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 
@@ -60,7 +60,7 @@ func TestInMemoryCache(t *testing.T) {
 	cacheBar, err := m.Save(NewCacheKey(dgst("bar"), "", 0), testResult("result1"), time.Now())
 	require.NoError(t, err)
 
-	keys, err = m.Query(nil, 0, dgst("bar"), 0)
+	keys, err = m.Query(ctx, nil, 0, dgst("bar"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 
@@ -73,7 +73,7 @@ func TestInMemoryCache(t *testing.T) {
 	require.Equal(t, "result1", unwrap(res))
 
 	// invalid request
-	keys, err = m.Query(nil, 0, dgst("baz"), 0)
+	keys, err = m.Query(ctx, nil, 0, dgst("baz"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(keys))
 
@@ -82,19 +82,19 @@ func TestInMemoryCache(t *testing.T) {
 	cacheBaz, err := m.Save(k, testResult("result2"), time.Now())
 	require.NoError(t, err)
 
-	keys, err = m.Query(nil, 0, dgst("baz"), 0)
+	keys, err = m.Query(ctx, nil, 0, dgst("baz"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(keys))
 
-	keys, err = m.Query(depKeys(*cacheFoo), 0, dgst("baz"), 0)
+	keys, err = m.Query(ctx, depKeys(*cacheFoo), 0, dgst("baz"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(keys))
 
-	keys, err = m.Query(depKeys(*cacheFoo), 1, dgst("baz"), Index(1))
+	keys, err = m.Query(ctx, depKeys(*cacheFoo), 1, dgst("baz"), Index(1))
 	require.NoError(t, err)
 	require.Equal(t, 0, len(keys))
 
-	keys, err = m.Query(depKeys(*cacheFoo), 0, dgst("baz"), Index(1))
+	keys, err = m.Query(ctx, depKeys(*cacheFoo), 0, dgst("baz"), Index(1))
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 
@@ -106,7 +106,7 @@ func TestInMemoryCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "result2", unwrap(res))
 
-	keys2, err := m.Query(depKeys(*cacheBar), 1, dgst("baz"), Index(1))
+	keys2, err := m.Query(ctx, depKeys(*cacheBar), 1, dgst("baz"), Index(1))
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys2))
 
@@ -116,7 +116,7 @@ func TestInMemoryCache(t *testing.T) {
 	_, err = m.Save(k, testResult("result3"), time.Now())
 	require.NoError(t, err)
 
-	keys, err = m.Query(depKeys(*cacheFoo), 0, dgst("baz"), Index(1))
+	keys, err = m.Query(ctx, depKeys(*cacheFoo), 0, dgst("baz"), Index(1))
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 
@@ -132,18 +132,18 @@ func TestInMemoryCache(t *testing.T) {
 	require.NoError(t, err)
 
 	// foo, bar, baz should all point to result4
-	keys, err = m.Query(depKeys(*cacheFoo), 0, dgst("bax"), 0)
+	keys, err = m.Query(ctx, depKeys(*cacheFoo), 0, dgst("bax"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 
 	id := keys[0].ID
 
-	keys, err = m.Query(depKeys(*cacheBar), 1, dgst("bax"), 0)
+	keys, err = m.Query(ctx, depKeys(*cacheBar), 1, dgst("bax"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 	require.Equal(t, keys[0].ID, id)
 
-	keys, err = m.Query(depKeys(*cacheBaz), 0, dgst("bax"), 0)
+	keys, err = m.Query(ctx, depKeys(*cacheBaz), 0, dgst("bax"), 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(keys))
 	require.Equal(t, keys[0].ID, id)

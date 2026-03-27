@@ -31,7 +31,6 @@ import (
 	"github.com/moby/buildkit/session/grpchijack"
 	containerdsnapshot "github.com/moby/buildkit/snapshot/containerd"
 	"github.com/moby/buildkit/solver"
-	"github.com/moby/buildkit/solver/bboltcachestorage"
 	"github.com/moby/buildkit/solver/llbsolver"
 	"github.com/moby/buildkit/solver/llbsolver/cdidevices"
 	"github.com/moby/buildkit/solver/llbsolver/history"
@@ -50,6 +49,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	tracev1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -69,13 +69,14 @@ type Opt struct {
 	Entitlements              []string
 	TraceCollector            sdktrace.SpanExporter
 	HistoryDB                 db.DB
-	CacheStore                *bboltcachestorage.Store
+	CacheStore                solver.PersistentCacheKeyStorage
 	LeaseManager              *leaseutil.Manager
 	ContentStore              *containerdsnapshot.Store
 	HistoryConfig             *config.HistoryConfig
 	GarbageCollect            func(context.Context) error
 	GracefulStop              <-chan struct{}
 	ProvenanceEnv             map[string]any
+	TracerProvider            oteltrace.TracerProvider
 }
 
 type Controller struct { // TODO: ControlService
@@ -117,6 +118,7 @@ func NewController(opt Opt) (*Controller, error) {
 		Entitlements:     opt.Entitlements,
 		HistoryQueue:     hq,
 		ProvenanceEnv:    opt.ProvenanceEnv,
+		TracerProvider:   opt.TracerProvider,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create solver")

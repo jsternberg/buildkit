@@ -864,7 +864,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp t
 		"gha":      gha.ResolveCacheImporterFunc(cfg.Cache.GHA, verifierProvider),
 		"s3":       s3remotecache.ResolveCacheImporterFunc(),
 		"azblob":   azblob.ResolveCacheImporterFunc(),
-		"http":     httpremotecache.ResolveCacheImporterFunc(),
+		"http":     httpremotecache.ResolveCacheImporterFunc(tp),
 	}
 
 	if cfg.CDI.Disabled == nil || !*cfg.CDI.Disabled {

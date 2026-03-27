@@ -24,42 +24,64 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
+const pkgpath = "github.com/moby/buildkit/cache/remotecache/http"
+
 // ResolveCacheImporterFunc for "local" cache importer.
-func ResolveCacheImporterFunc() remotecache.ResolveCacheImporterFunc {
+func ResolveCacheImporterFunc(tp trace.TracerProvider) remotecache.ResolveCacheImporterFunc {
 	return func(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Importer, ocispecs.Descriptor, error) {
 		config, err := getConfig(attrs)
 		if err != nil {
 			return nil, ocispecs.Descriptor{}, err
 		}
-		return &importer{config}, ocispecs.Descriptor{}, nil
+		return &importer{config, tp}, ocispecs.Descriptor{}, nil
 	}
 }
 
 type importer struct {
 	config Config
+	tp     trace.TracerProvider
 }
 
 func (i *importer) Resolve(ctx context.Context, desc ocispecs.Descriptor, id string, w worker.Worker) (solver.CacheManager, error) {
-	return &cacheManager{
+	cm := &cacheManager{
 		id:     id,
 		config: i.config,
 		w:      w,
-	}, nil
+	}
+	if i.tp != nil {
+		cm.tracer = i.tp.Tracer(pkgpath)
+	}
+	return cm, nil
 }
 
 type cacheManager struct {
 	id     string
 	config Config
 	w      worker.Worker
+	tracer trace.Tracer
 }
 
 func (cm *cacheManager) ID() string {
 	return cm.id
 }
 
-func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
+func (cm *cacheManager) Query(ctx context.Context, inp []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
+	if cm.tracer != nil {
+		var span trace.Span
+		ctx, span = cm.tracer.Start(ctx, "(*cacheManager).Query",
+			trace.WithAttributes(
+				attribute.String("cache_manager", cm.id),
+				attribute.Int("input", int(inputIndex)),
+				attribute.String("digest", dgst.String()),
+				attribute.Int("output", int(outputIndex)),
+			))
+		defer span.End()
+	}
+
 	req := &QueryRequest{
 		Digest:     outputKey(dgst, int(outputIndex)),
 		InputIndex: inputIndex,
@@ -116,8 +138,17 @@ func (cm *cacheManager) Query(inp []solver.CacheKeyWithSelector, inputIndex solv
 }
 
 func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.CacheRecord, error) {
+	if cm.tracer != nil {
+		var span trace.Span
+		ctx, span = cm.tracer.Start(ctx, "(*cacheManager).Records",
+			trace.WithAttributes(
+				attribute.String("cache_manager", cm.id),
+			))
+		defer span.End()
+	}
+
 	urlStr := fmt.Sprintf("%s/records", cm.config.EndpointURL)
-	hreq, err := http.NewRequest("GET", urlStr, nil)
+	hreq, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +193,15 @@ func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*so
 }
 
 func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solver.Result, error) {
+	if cm.tracer != nil {
+		var span trace.Span
+		ctx, span = cm.tracer.Start(ctx, "(*cacheManager).Load",
+			trace.WithAttributes(
+				attribute.String("cache_manager", cm.id),
+			))
+		defer span.End()
+	}
+
 	layers, err := cm.loadManifest(ctx, rec)
 	if err != nil {
 		return nil, err

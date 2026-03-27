@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"strconv"
 	"time"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/pkg/labels"
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/buildkit/cache/remotecache"
 	cacheimport "github.com/moby/buildkit/cache/remotecache/v1"
 	cacheimporttypes "github.com/moby/buildkit/cache/remotecache/v1/types"
@@ -276,9 +278,60 @@ func (cm *cacheManager) loadManifest(ctx context.Context, rec *solver.CacheRecor
 }
 
 func (cm *cacheManager) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) (content.ReaderAt, error) {
-	bklog.G(ctx).Info("attempted to call reader at but it hasn't been implemented yet")
-	debug.PrintStack()
-	return nil, errors.New("implement reader at")
+	urlStr := fmt.Sprintf("%s/blobs/sha256/%s", cm.config.EndpointURL, desc.Digest.Encoded())
+
+	open := func(offset int64) (_ io.ReadCloser, retErr error) {
+		defer func() {
+			bklog.G(context.Background()).Infof("opened reader with offset %d err: %v", offset, retErr)
+		}()
+
+		req, err := http.NewRequestWithContext(context.Background(), "GET", urlStr, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		if offset > 0 {
+			params := url.Values{}
+			params.Set("offset", strconv.FormatInt(offset, 10))
+			req.URL.RawQuery = params.Encode()
+		}
+		bklog.G(context.Background()).Infof("opening reader at url %s with offset %d", urlStr, offset)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			bklog.G(context.Background()).Infof("response err: %v", err)
+			return nil, err
+		}
+
+		if resp.StatusCode/100 != 2 {
+			defer resp.Body.Close()
+			if resp.StatusCode == 404 {
+				return nil, cerrdefs.ErrNotFound
+			}
+			msg, _ := io.ReadAll(resp.Body)
+			return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
+		}
+
+		for k, v := range resp.Header {
+			bklog.G(context.Background()).Infof("returned header %s=%s", k, v[0])
+		}
+		return resp.Body, nil
+	}
+	readerAtCloser := toReaderAtCloser(open)
+	return &readerAt{ReaderAtCloser: readerAtCloser, size: desc.Size}, nil
+}
+
+type readCloserDebugger struct {
+	io.ReadCloser
+}
+
+func (r *readCloserDebugger) Read(p []byte) (n int, err error) {
+	defer func() {
+		if err != nil {
+			bklog.G(context.Background()).Infof("importer read error: %v", err)
+		}
+	}()
+	return r.ReadCloser.Read(p)
 }
 
 func (cm *cacheManager) Save(key *solver.CacheKey, s solver.Result, createdAt time.Time) (*solver.ExportableCacheKey, error) {
@@ -313,12 +366,23 @@ func toReaderAtCloser(open func(offset int64) (io.ReadCloser, error)) ReaderAtCl
 }
 
 func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
+	defer func() {
+		bklog.G(context.Background()).Infof("readat (p: %d) (off: %d) (n: %d) (err: %v)", len(p), off, n, err)
+		if err != nil {
+			debug.PrintStack()
+		}
+	}()
+
 	if hrs.closed {
 		return 0, io.EOF
 	}
 
 	if hrs.ra != nil {
-		return hrs.ra.ReadAt(p, off)
+		n, err = hrs.ra.ReadAt(p, off)
+		if err != nil {
+			bklog.G(context.Background()).Infof("readat line 379 err: %v", err)
+		}
+		return n, err
 	}
 
 	if hrs.rc == nil || off != hrs.offset {
@@ -328,6 +392,7 @@ func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
 		}
 		rc, err := hrs.open(off)
 		if err != nil {
+			bklog.G(context.Background()).Infof("readat line 391 err: %v", err)
 			return 0, err
 		}
 		hrs.rc = rc
@@ -335,10 +400,16 @@ func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
 	if ra, ok := hrs.rc.(io.ReaderAt); ok {
 		hrs.ra = ra
 		n, err = ra.ReadAt(p, off)
+		if err != nil {
+			bklog.G(context.Background()).Infof("readat line 400 err: %v", err)
+		}
 	} else {
 		for {
 			var nn int
 			nn, err = hrs.rc.Read(p)
+			if err != nil {
+				bklog.G(context.Background()).Infof("readat line 407 err: %v", err)
+			}
 			n += nn
 			p = p[nn:]
 			if nn == len(p) || err != nil {

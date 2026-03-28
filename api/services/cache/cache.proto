@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package moby.buildkit.v1;
+package moby.buildkit.v1.cache;
 
 option go_package = "github.com/moby/buildkit/api/services/cache;moby_buildkit_v1";
 
@@ -10,11 +10,11 @@ service CacheManager {
   rpc Record(RecordRequest) returns (RecordResponse);
 }
 
-service BlobStorage {
-  rpc Info(BlobInfoRequest) returns (BlobInfoResponse);
-  rpc Get(BlobGetRequest) returns (stream BytesMessage);
-  rpc Upload(stream BytesMessage) returns (BlobUploadResponse);
-  rpc Commit(BlobCommitRequest) returns (BlobCommitResponse);
+service CacheStorage {
+  rpc Info(LayerInfoRequest) returns (LayerInfoResponse);
+  rpc Get(LayerGetRequest) returns (stream BytesMessage);
+  rpc Upload(stream BytesMessage) returns (LayerUploadResponse);
+  rpc Commit(LayerCommitRequest) returns (LayerCommitResponse);
 }
 
 message QueryRequest {
@@ -43,35 +43,30 @@ message RecordResponse {
   repeated CacheLayer layers = 1;
 }
 
-message GetBlobRequest {
+message LayerInfoRequest {
+  string digest = 1;
+}
+
+message LayerInfoResponse {
+  CacheLayer layer = 1;
+}
+
+message LayerGetRequest {
   string digest = 1;
   uint64 offset = 2;
-  uint64 limit = 3;
 }
 
-message BlobInfoRequest {
-  string digest = 1;
+message LayerUploadResponse {
+  string id = 1;
+  int64 expires_at = 2;
 }
 
-message BlobInfoResponse {
+message LayerCommitRequest{
+  string id = 1;
+  string digest = 2;
 }
 
-message BlobGetRequest {
-}
-
-message BlobUploadResponse {
-}
-
-message BlobCommitRequest{
-}
-
-message BlobCommitResponse {
-}
-
-message BlobUploadRequest {
-}
-
-message BlobUploadResponse {
+message LayerCommitResponse {
 }
 
 message CacheKeyWithSelector {

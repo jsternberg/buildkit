@@ -2,8 +2,6 @@ package solver
 
 import (
 	"context"
-	"maps"
-	"slices"
 	"sync"
 	"time"
 
@@ -219,7 +217,6 @@ func (e *edge) probeCache(ctx context.Context, tracer trace.Tracer, d *dep, depK
 			found = true
 		}
 	}
-	bklog.G(context.TODO()).Debugf("probe cache key map: %v %v", slices.Collect(maps.Keys(d.keyMap)), found)
 	return found
 }
 
@@ -492,14 +489,12 @@ func (e *edge) recalcCurrentState(ctx context.Context, tracer trace.Tracer) {
 			}
 		}
 
-		bklog.G(context.TODO()).Debugf("retrieving cache records for merged key: %s", mergedKey.ID)
 		records, err := e.op.Cache().Records(ctx, mergedKey)
 		if err != nil {
 			bklog.G(context.TODO()).Errorf("error receiving cache records: %v", err)
 			continue
 		}
 
-		bklog.G(context.TODO()).Debugf("cache records returned %d", len(records))
 		for _, r := range records {
 			if _, ok := e.cacheRecordsLoaded[r.ID]; !ok {
 				e.cacheRecords[r.ID] = r
@@ -1001,7 +996,6 @@ func (e *edge) loadCache(ctx context.Context) (any, error) {
 		bklog.G(ctx).Debugf("load cache for %s err: %v", e.edge.Vertex.Name(), err)
 		return nil, errors.Wrap(err, "failed to load cache")
 	}
-	bklog.G(ctx).Debugf("load cache for %s success", e.edge.Vertex.Name())
 
 	return NewCachedResult(res, []ExportableCacheKey{{CacheKey: rec.key, Exporter: &exporter{k: rec.key, record: rec, edge: e, recordCtxOpts: ctxOpts}}}), nil
 }

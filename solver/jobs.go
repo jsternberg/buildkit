@@ -983,7 +983,6 @@ func (s *sharedOp) LoadCache(ctx context.Context, rec *CacheRecord) (Result, fun
 	s.st.execSpan = span
 	notifyCompleted := notifyStarted(ctx, &s.st.clientVertex, true)
 	res, err := s.Cache().Load(withAncestorCacheOpts(ctx, s.st), rec)
-	bklog.G(ctx).Infof("load cache error: %s", err)
 	tracing.FinishWithError(span, err)
 	notifyCompleted(err, true)
 	return res, func(ctx context.Context) context.Context {

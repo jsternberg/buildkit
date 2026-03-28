@@ -2,14 +2,10 @@ package solver
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/moby/buildkit/util/bklog"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -55,19 +51,11 @@ func (cm *combinedCacheManager) Query(ctx context.Context, inp []CacheKeyWithSel
 	var mu sync.Mutex
 	for _, c := range cm.cms {
 		eg.Go(func() error {
-			dt, _ := json.Marshal(inp)
-			bklog.G(context.TODO()).Debugf("cm %s: query for %v %d %s", c.ID(), string(dt), inputIndex, rootKey(dgst, outputIndex))
-
 			recs, err := c.Query(ctx, inp, inputIndex, dgst, outputIndex)
 			if err != nil {
 				return err
 			}
 
-			names := make([]string, len(recs))
-			for i, r := range recs {
-				names[i] = r.ID
-			}
-			bklog.G(context.TODO()).Debugf("cm %s: records returned %d %v", c.ID(), len(recs), names)
 			mu.Lock()
 			for _, r := range recs {
 				if _, ok := r.ids[c]; !ok {
@@ -91,13 +79,6 @@ func (cm *combinedCacheManager) Query(ctx context.Context, inp []CacheKeyWithSel
 	for _, k := range keys {
 		out = append(out, k)
 	}
-
-	names := make([]string, 0, len(out))
-	for _, k := range out {
-		names = append(names, k.ID)
-	}
-	fmt.Printf("combined query results: %v\n", names)
-	debug.PrintStack()
 	return out, nil
 }
 
@@ -127,18 +108,14 @@ func (cm *combinedCacheManager) Load(ctx context.Context, rec *CacheRecord) (res
 	}()
 	if rec.cacheManager != cm.main && cm.main != nil {
 		for _, res := range results {
-			bklog.G(ctx).Infof("saving %s to main cache with cache key %s", res.Result.ID(), res.CacheKey.ID)
-			if ck, err := cm.main.Save(res.CacheKey, res.Result, res.CacheResult.CreatedAt); err != nil {
+			if _, err := cm.main.Save(res.CacheKey, res.Result, res.CacheResult.CreatedAt); err != nil {
 				return nil, err
-			} else {
-				bklog.G(ctx).Infof("saved as %s", ck.ID)
 			}
 		}
 	}
 	if len(results) == 0 { // TODO: handle gracefully
 		return nil, errors.Errorf("failed to load deleted cache")
 	}
-	bklog.G(ctx).Info("successfully loaded cache record")
 	return results[0].Result, nil
 }
 
@@ -150,8 +127,6 @@ func (cm *combinedCacheManager) Save(key *CacheKey, s Result, createdAt time.Tim
 }
 
 func (cm *combinedCacheManager) Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error) {
-	fmt.Println("combined cache records:", ck.ID)
-
 	ck.mu.RLock()
 	if len(ck.ids) == 0 {
 		ck.mu.RUnlock()

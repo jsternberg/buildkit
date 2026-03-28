@@ -16,7 +16,6 @@ import (
 	cacheimporttypes "github.com/moby/buildkit/cache/remotecache/v1/types"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver"
-	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/compression"
 	"github.com/moby/buildkit/util/progress"
 	"github.com/opencontainers/go-digest"
@@ -123,7 +122,6 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 					}
 					layerDone(nil)
 				}
-				bklog.G(groupCtx).Infof("writing layer %s blob %d", dgstPair.Descriptor.Digest, dgstPair.Descriptor.Size)
 
 				la := &cacheimporttypes.LayerAnnotations{
 					DiffID:    diffID,

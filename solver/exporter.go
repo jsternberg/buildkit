@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/moby/buildkit/util/bklog"
 	digest "github.com/opencontainers/go-digest"
 )
 
@@ -139,7 +138,6 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 		exportRecord = true
 	}
 
-	bklog.G(ctx).Infof("cloning records of size %d", len(e.records))
 	records := slices.Clone(e.records)
 	slices.SortStableFunc(records, compareCacheRecord)
 
@@ -151,9 +149,7 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 		ctx = e.recordCtxOpts(ctx)
 	}
 	v := e.record
-	bklog.G(ctx).Info("starting export record loop")
 	for exportRecord && addRecord {
-		bklog.G(ctx).Infof("value is %#v", v)
 		if v == nil {
 			if i < len(records) {
 				v = records[i]
@@ -168,7 +164,6 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 			break
 		}
 
-		bklog.G(ctx).Info("this is a normal cache manager")
 		key := cm.getID(v.key)
 		res, err := cm.backend.Load(key, v.ID)
 		if err != nil {
@@ -236,7 +231,6 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 		}
 		break
 	}
-	bklog.G(ctx).Info("moving past to a new section")
 
 	if remote != nil && opt.Mode == CacheExportModeMin {
 		opt.Mode = CacheExportModeRemoteOnly

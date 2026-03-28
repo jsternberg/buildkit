@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -20,7 +19,6 @@ import (
 	cacheimporttypes "github.com/moby/buildkit/cache/remotecache/v1/types"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver"
-	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/worker"
 	"github.com/opencontainers/go-digest"
@@ -97,9 +95,6 @@ func (cm *cacheManager) Query(ctx context.Context, inp []solver.CacheKeyWithSele
 		req.Inputs = append(req.Inputs, input)
 	}
 
-	dt, _ := json.Marshal(req)
-	fmt.Println("query request:", string(dt))
-
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -121,12 +116,8 @@ func (cm *cacheManager) Query(ctx context.Context, inp []solver.CacheKeyWithSele
 		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
 	}
 
-	dt, _ = io.ReadAll(resp.Body)
-	fmt.Println("query response:", string(dt))
-	debug.PrintStack()
-
 	var queryResp QueryResponse
-	if err := json.NewDecoder(bytes.NewReader(dt)).Decode(&queryResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&queryResp); err != nil {
 		return nil, err
 	}
 
@@ -160,7 +151,6 @@ func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*so
 	hreq.URL.RawQuery = params.Encode()
 	hreq.Header.Set("Accept", "application/json")
 
-	bklog.G(ctx).Infof("sending request to %s", hreq.URL.String())
 	resp, err := http.DefaultClient.Do(hreq)
 	if err != nil {
 		return nil, err
@@ -172,11 +162,8 @@ func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*so
 		return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
 	}
 
-	dt, _ := io.ReadAll(resp.Body)
-	fmt.Println("records:", string(dt))
-
 	var recordsResp RecordsResponse
-	if err := json.NewDecoder(bytes.NewReader(dt)).Decode(&recordsResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&recordsResp); err != nil {
 		return nil, err
 	}
 
@@ -208,7 +195,6 @@ func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solv
 	if err != nil {
 		return nil, err
 	}
-	bklog.G(ctx).Infof("loading cache record %s with %d layers", rec.ID, len(layers))
 
 	mp := contentutil.NewMultiProvider(nil)
 	remote := &solver.Remote{}
@@ -236,12 +222,10 @@ func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solv
 	}
 	remote.Provider = mp
 
-	bklog.G(ctx).Infof("constructed solver result for %s", rec.ID)
 	ref, err := cm.w.FromRemote(ctx, remote)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load result from remote")
 	}
-	bklog.G(ctx).Infof("immutable reference from remote: %#v", ref)
 	return worker.NewWorkerRefResult(ref, cm.w), nil
 }
 
@@ -256,8 +240,6 @@ func (cm *cacheManager) loadManifest(ctx context.Context, rec *solver.CacheRecor
 	params.Set("q", rec.ID)
 	hreq.URL.RawQuery = params.Encode()
 	hreq.Header.Set("Accept", "application/json")
-
-	bklog.G(ctx).Infof("sending request to %s", hreq.URL.String())
 
 	resp, err := http.DefaultClient.Do(hreq)
 	if err != nil {
@@ -281,10 +263,6 @@ func (cm *cacheManager) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) 
 	urlStr := fmt.Sprintf("%s/blobs/sha256/%s", cm.config.EndpointURL, desc.Digest.Encoded())
 
 	open := func(offset int64) (_ io.ReadCloser, retErr error) {
-		defer func() {
-			bklog.G(context.Background()).Infof("opened reader with offset %d err: %v", offset, retErr)
-		}()
-
 		req, err := http.NewRequestWithContext(context.Background(), "GET", urlStr, nil)
 		if err != nil {
 			return nil, err
@@ -295,11 +273,9 @@ func (cm *cacheManager) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) 
 			params.Set("offset", strconv.FormatInt(offset, 10))
 			req.URL.RawQuery = params.Encode()
 		}
-		bklog.G(context.Background()).Infof("opening reader at url %s with offset %d", urlStr, offset)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			bklog.G(context.Background()).Infof("response err: %v", err)
 			return nil, err
 		}
 
@@ -310,10 +286,6 @@ func (cm *cacheManager) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) 
 			}
 			msg, _ := io.ReadAll(resp.Body)
 			return nil, errors.Errorf("unexpected http status code %s: %s", resp.Status, string(msg))
-		}
-
-		for k, v := range resp.Header {
-			bklog.G(context.Background()).Infof("returned header %s=%s", k, v[0])
 		}
 		return resp.Body, nil
 	}
@@ -326,11 +298,6 @@ type readCloserDebugger struct {
 }
 
 func (r *readCloserDebugger) Read(p []byte) (n int, err error) {
-	defer func() {
-		if err != nil {
-			bklog.G(context.Background()).Infof("importer read error: %v", err)
-		}
-	}()
 	return r.ReadCloser.Read(p)
 }
 
@@ -366,23 +333,12 @@ func toReaderAtCloser(open func(offset int64) (io.ReadCloser, error)) ReaderAtCl
 }
 
 func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
-	defer func() {
-		bklog.G(context.Background()).Infof("readat (p: %d) (off: %d) (n: %d) (err: %v)", len(p), off, n, err)
-		if err != nil {
-			debug.PrintStack()
-		}
-	}()
-
 	if hrs.closed {
 		return 0, io.EOF
 	}
 
 	if hrs.ra != nil {
-		n, err = hrs.ra.ReadAt(p, off)
-		if err != nil {
-			bklog.G(context.Background()).Infof("readat line 379 err: %v", err)
-		}
-		return n, err
+		return hrs.ra.ReadAt(p, off)
 	}
 
 	if hrs.rc == nil || off != hrs.offset {
@@ -392,7 +348,6 @@ func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
 		}
 		rc, err := hrs.open(off)
 		if err != nil {
-			bklog.G(context.Background()).Infof("readat line 391 err: %v", err)
 			return 0, err
 		}
 		hrs.rc = rc
@@ -400,16 +355,10 @@ func (hrs *readerAtCloser) ReadAt(p []byte, off int64) (n int, err error) {
 	if ra, ok := hrs.rc.(io.ReaderAt); ok {
 		hrs.ra = ra
 		n, err = ra.ReadAt(p, off)
-		if err != nil {
-			bklog.G(context.Background()).Infof("readat line 400 err: %v", err)
-		}
 	} else {
 		for {
 			var nn int
 			nn, err = hrs.rc.Read(p)
-			if err != nil {
-				bklog.G(context.Background()).Infof("readat line 407 err: %v", err)
-			}
 			n += nn
 			p = p[nn:]
 			if nn == len(p) || err != nil {

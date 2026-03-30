@@ -19,18 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CacheManager_Query_FullMethodName   = "/moby.buildkit.v1.cache.CacheManager/Query"
-	CacheManager_Records_FullMethodName = "/moby.buildkit.v1.cache.CacheManager/Records"
-	CacheManager_Record_FullMethodName  = "/moby.buildkit.v1.cache.CacheManager/Record"
+	CacheManager_Initialize_FullMethodName = "/moby.buildkit.v1.cache.CacheManager/Initialize"
+	CacheManager_Query_FullMethodName      = "/moby.buildkit.v1.cache.CacheManager/Query"
+	CacheManager_Records_FullMethodName    = "/moby.buildkit.v1.cache.CacheManager/Records"
+	CacheManager_Record_FullMethodName     = "/moby.buildkit.v1.cache.CacheManager/Record"
+	CacheManager_Import_FullMethodName     = "/moby.buildkit.v1.cache.CacheManager/Import"
 )
 
 // CacheManagerClient is the client API for CacheManager service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CacheManagerClient interface {
+	Initialize(ctx context.Context, in *InitializeRequest, opts ...grpc.CallOption) (*InitializeResponse, error)
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error)
 	Records(ctx context.Context, in *RecordsRequest, opts ...grpc.CallOption) (*RecordsResponse, error)
 	Record(ctx context.Context, in *RecordRequest, opts ...grpc.CallOption) (*RecordResponse, error)
+	Import(ctx context.Context, in *ImportRequest, opts ...grpc.CallOption) (*ImportResponse, error)
 }
 
 type cacheManagerClient struct {
@@ -39,6 +43,16 @@ type cacheManagerClient struct {
 
 func NewCacheManagerClient(cc grpc.ClientConnInterface) CacheManagerClient {
 	return &cacheManagerClient{cc}
+}
+
+func (c *cacheManagerClient) Initialize(ctx context.Context, in *InitializeRequest, opts ...grpc.CallOption) (*InitializeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InitializeResponse)
+	err := c.cc.Invoke(ctx, CacheManager_Initialize_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *cacheManagerClient) Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error) {
@@ -71,13 +85,25 @@ func (c *cacheManagerClient) Record(ctx context.Context, in *RecordRequest, opts
 	return out, nil
 }
 
+func (c *cacheManagerClient) Import(ctx context.Context, in *ImportRequest, opts ...grpc.CallOption) (*ImportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportResponse)
+	err := c.cc.Invoke(ctx, CacheManager_Import_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CacheManagerServer is the server API for CacheManager service.
 // All implementations should embed UnimplementedCacheManagerServer
 // for forward compatibility.
 type CacheManagerServer interface {
+	Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error)
 	Query(context.Context, *QueryRequest) (*QueryResponse, error)
 	Records(context.Context, *RecordsRequest) (*RecordsResponse, error)
 	Record(context.Context, *RecordRequest) (*RecordResponse, error)
+	Import(context.Context, *ImportRequest) (*ImportResponse, error)
 }
 
 // UnimplementedCacheManagerServer should be embedded to have
@@ -87,6 +113,9 @@ type CacheManagerServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCacheManagerServer struct{}
 
+func (UnimplementedCacheManagerServer) Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Initialize not implemented")
+}
 func (UnimplementedCacheManagerServer) Query(context.Context, *QueryRequest) (*QueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Query not implemented")
 }
@@ -95,6 +124,9 @@ func (UnimplementedCacheManagerServer) Records(context.Context, *RecordsRequest)
 }
 func (UnimplementedCacheManagerServer) Record(context.Context, *RecordRequest) (*RecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Record not implemented")
+}
+func (UnimplementedCacheManagerServer) Import(context.Context, *ImportRequest) (*ImportResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Import not implemented")
 }
 func (UnimplementedCacheManagerServer) testEmbeddedByValue() {}
 
@@ -114,6 +146,24 @@ func RegisterCacheManagerServer(s grpc.ServiceRegistrar, srv CacheManagerServer)
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&CacheManager_ServiceDesc, srv)
+}
+
+func _CacheManager_Initialize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InitializeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheManagerServer).Initialize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheManager_Initialize_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheManagerServer).Initialize(ctx, req.(*InitializeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _CacheManager_Query_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -170,6 +220,24 @@ func _CacheManager_Record_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CacheManager_Import_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheManagerServer).Import(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheManager_Import_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheManagerServer).Import(ctx, req.(*ImportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CacheManager_ServiceDesc is the grpc.ServiceDesc for CacheManager service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -177,6 +245,10 @@ var CacheManager_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "moby.buildkit.v1.cache.CacheManager",
 	HandlerType: (*CacheManagerServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Initialize",
+			Handler:    _CacheManager_Initialize_Handler,
+		},
 		{
 			MethodName: "Query",
 			Handler:    _CacheManager_Query_Handler,
@@ -188,6 +260,10 @@ var CacheManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Record",
 			Handler:    _CacheManager_Record_Handler,
+		},
+		{
+			MethodName: "Import",
+			Handler:    _CacheManager_Import_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

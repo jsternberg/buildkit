@@ -5,9 +5,11 @@ package moby.buildkit.v1.cache;
 option go_package = "github.com/moby/buildkit/api/services/cache;moby_buildkit_v1";
 
 service CacheManager {
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
   rpc Query(QueryRequest) returns (QueryResponse);
   rpc Records(RecordsRequest) returns (RecordsResponse);
   rpc Record(RecordRequest) returns (RecordResponse);
+  rpc Import(ImportRequest) returns (ImportResponse);
 }
 
 service CacheStorage {
@@ -15,6 +17,14 @@ service CacheStorage {
   rpc Get(LayerGetRequest) returns (stream BytesMessage);
   rpc Upload(stream BytesMessage) returns (LayerUploadResponse);
   rpc Commit(LayerCommitRequest) returns (LayerCommitResponse);
+}
+
+message InitializeRequest {
+  repeated KeyValue attrs = 1;
+}
+
+message InitializeResponse {
+  Capabilities caps = 1;
 }
 
 message QueryRequest {
@@ -43,6 +53,14 @@ message RecordResponse {
   repeated CacheLayer layers = 1;
 }
 
+message ImportRequest {
+  repeated CacheLayer layers = 1;
+  repeated ExportableCacheRecord records = 2;
+}
+
+message ImportResponse {
+}
+
 message LayerInfoRequest {
   string digest = 1;
 }
@@ -69,6 +87,9 @@ message LayerCommitRequest{
 message LayerCommitResponse {
 }
 
+message Capabilities {
+}
+
 message CacheKeyWithSelector {
   string id = 1;
   string selector = 2;
@@ -88,6 +109,27 @@ message CacheLayer {
   int64 created_at = 6;
 }
 
+message CacheLayerReference {
+  int64 index = 1;
+  int64 created_at = 2;
+}
+
+message ExportableCacheRecord {
+  repeated CacheLayer layers = 1;
+  string digest = 2;
+  repeated CacheRecordInput inputs = 3;
+}
+
+message CacheRecordInput {
+  int64 link_index = 1;
+  string selector = 2;
+}
+
 message BytesMessage {
   repeated bytes data = 1;
+}
+
+message KeyValue {
+  string key = 1;
+  string value = 2;
 }

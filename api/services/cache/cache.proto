@@ -54,11 +54,11 @@ message RecordResponse {
 }
 
 message ImportRequest {
-  repeated CacheLayer layers = 1;
-  repeated ExportableCacheRecord records = 2;
+  repeated ExportableCacheRecord records = 1;
 }
 
 message ImportResponse {
+  repeated KeyValue attrs = 1;
 }
 
 message LayerInfoRequest {
@@ -117,7 +117,11 @@ message CacheLayerReference {
 message ExportableCacheRecord {
   repeated CacheLayer layers = 1;
   string digest = 2;
-  repeated CacheRecordInput inputs = 3;
+  repeated CacheRecordInputs inputs = 3;
+}
+
+message CacheRecordInputs {
+  repeated CacheRecordInput inputs = 1;
 }
 
 message CacheRecordInput {
@@ -126,7 +130,7 @@ message CacheRecordInput {
 }
 
 message BytesMessage {
-  repeated bytes data = 1;
+  bytes data = 1;
 }
 
 message KeyValue {

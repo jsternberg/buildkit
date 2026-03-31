@@ -190,13 +190,6 @@ func (m *ImportRequest) CloneVT() *ImportRequest {
 		return (*ImportRequest)(nil)
 	}
 	r := new(ImportRequest)
-	if rhs := m.Layers; rhs != nil {
-		tmpContainer := make([]*CacheLayer, len(rhs))
-		for k, v := range rhs {
-			tmpContainer[k] = v.CloneVT()
-		}
-		r.Layers = tmpContainer
-	}
 	if rhs := m.Records; rhs != nil {
 		tmpContainer := make([]*ExportableCacheRecord, len(rhs))
 		for k, v := range rhs {
@@ -220,6 +213,13 @@ func (m *ImportResponse) CloneVT() *ImportResponse {
 		return (*ImportResponse)(nil)
 	}
 	r := new(ImportResponse)
+	if rhs := m.Attrs; rhs != nil {
+		tmpContainer := make([]*KeyValue, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Attrs = tmpContainer
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -441,7 +441,7 @@ func (m *ExportableCacheRecord) CloneVT() *ExportableCacheRecord {
 		r.Layers = tmpContainer
 	}
 	if rhs := m.Inputs; rhs != nil {
-		tmpContainer := make([]*CacheRecordInput, len(rhs))
+		tmpContainer := make([]*CacheRecordInputs, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -455,6 +455,29 @@ func (m *ExportableCacheRecord) CloneVT() *ExportableCacheRecord {
 }
 
 func (m *ExportableCacheRecord) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *CacheRecordInputs) CloneVT() *CacheRecordInputs {
+	if m == nil {
+		return (*CacheRecordInputs)(nil)
+	}
+	r := new(CacheRecordInputs)
+	if rhs := m.Inputs; rhs != nil {
+		tmpContainer := make([]*CacheRecordInput, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.Inputs = tmpContainer
+	}
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *CacheRecordInputs) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -482,13 +505,9 @@ func (m *BytesMessage) CloneVT() *BytesMessage {
 	}
 	r := new(BytesMessage)
 	if rhs := m.Data; rhs != nil {
-		tmpContainer := make([][]byte, len(rhs))
-		for k, v := range rhs {
-			tmpBytes := make([]byte, len(v))
-			copy(tmpBytes, v)
-			tmpContainer[k] = tmpBytes
-		}
-		r.Data = tmpContainer
+		tmpBytes := make([]byte, len(rhs))
+		copy(tmpBytes, rhs)
+		r.Data = tmpBytes
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -745,23 +764,6 @@ func (this *ImportRequest) EqualVT(that *ImportRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if len(this.Layers) != len(that.Layers) {
-		return false
-	}
-	for i, vx := range this.Layers {
-		vy := that.Layers[i]
-		if p, q := vx, vy; p != q {
-			if p == nil {
-				p = &CacheLayer{}
-			}
-			if q == nil {
-				q = &CacheLayer{}
-			}
-			if !p.EqualVT(q) {
-				return false
-			}
-		}
-	}
 	if len(this.Records) != len(that.Records) {
 		return false
 	}
@@ -794,6 +796,23 @@ func (this *ImportResponse) EqualVT(that *ImportResponse) bool {
 		return true
 	} else if this == nil || that == nil {
 		return false
+	}
+	if len(this.Attrs) != len(that.Attrs) {
+		return false
+	}
+	for i, vx := range this.Attrs {
+		vy := that.Attrs[i]
+		if p, q := vx, vy; p != q {
+			if p == nil {
+				p = &KeyValue{}
+			}
+			if q == nil {
+				q = &KeyValue{}
+			}
+			if !p.EqualVT(q) {
+				return false
+			}
+		}
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
 }
@@ -1074,6 +1093,39 @@ func (this *ExportableCacheRecord) EqualVT(that *ExportableCacheRecord) bool {
 		vy := that.Inputs[i]
 		if p, q := vx, vy; p != q {
 			if p == nil {
+				p = &CacheRecordInputs{}
+			}
+			if q == nil {
+				q = &CacheRecordInputs{}
+			}
+			if !p.EqualVT(q) {
+				return false
+			}
+		}
+	}
+	return string(this.unknownFields) == string(that.unknownFields)
+}
+
+func (this *ExportableCacheRecord) EqualMessageVT(thatMsg proto.Message) bool {
+	that, ok := thatMsg.(*ExportableCacheRecord)
+	if !ok {
+		return false
+	}
+	return this.EqualVT(that)
+}
+func (this *CacheRecordInputs) EqualVT(that *CacheRecordInputs) bool {
+	if this == that {
+		return true
+	} else if this == nil || that == nil {
+		return false
+	}
+	if len(this.Inputs) != len(that.Inputs) {
+		return false
+	}
+	for i, vx := range this.Inputs {
+		vy := that.Inputs[i]
+		if p, q := vx, vy; p != q {
+			if p == nil {
 				p = &CacheRecordInput{}
 			}
 			if q == nil {
@@ -1087,8 +1139,8 @@ func (this *ExportableCacheRecord) EqualVT(that *ExportableCacheRecord) bool {
 	return string(this.unknownFields) == string(that.unknownFields)
 }
 
-func (this *ExportableCacheRecord) EqualMessageVT(thatMsg proto.Message) bool {
-	that, ok := thatMsg.(*ExportableCacheRecord)
+func (this *CacheRecordInputs) EqualMessageVT(thatMsg proto.Message) bool {
+	that, ok := thatMsg.(*CacheRecordInputs)
 	if !ok {
 		return false
 	}
@@ -1122,14 +1174,8 @@ func (this *BytesMessage) EqualVT(that *BytesMessage) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if len(this.Data) != len(that.Data) {
+	if string(this.Data) != string(that.Data) {
 		return false
-	}
-	for i, vx := range this.Data {
-		vy := that.Data[i]
-		if string(vx) != string(vy) {
-			return false
-		}
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
 }
@@ -1559,18 +1605,6 @@ func (m *ImportRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			i -= size
 			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
-			dAtA[i] = 0x12
-		}
-	}
-	if len(m.Layers) > 0 {
-		for iNdEx := len(m.Layers) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.Layers[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-			i--
 			dAtA[i] = 0xa
 		}
 	}
@@ -1606,6 +1640,18 @@ func (m *ImportResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Attrs) > 0 {
+		for iNdEx := len(m.Attrs) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Attrs[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0xa
+		}
 	}
 	return len(dAtA) - i, nil
 }
@@ -2166,6 +2212,51 @@ func (m *ExportableCacheRecord) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	return len(dAtA) - i, nil
 }
 
+func (m *CacheRecordInputs) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *CacheRecordInputs) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *CacheRecordInputs) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Inputs) > 0 {
+		for iNdEx := len(m.Inputs) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Inputs[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *CacheRecordInput) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -2242,13 +2333,11 @@ func (m *BytesMessage) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if len(m.Data) > 0 {
-		for iNdEx := len(m.Data) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Data[iNdEx])
-			copy(dAtA[i:], m.Data[iNdEx])
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Data[iNdEx])))
-			i--
-			dAtA[i] = 0xa
-		}
+		i -= len(m.Data)
+		copy(dAtA[i:], m.Data)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Data)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -2435,12 +2524,6 @@ func (m *ImportRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.Layers) > 0 {
-		for _, e := range m.Layers {
-			l = e.SizeVT()
-			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-		}
-	}
 	if len(m.Records) > 0 {
 		for _, e := range m.Records {
 			l = e.SizeVT()
@@ -2457,6 +2540,12 @@ func (m *ImportResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	if len(m.Attrs) > 0 {
+		for _, e := range m.Attrs {
+			l = e.SizeVT()
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2670,6 +2759,22 @@ func (m *ExportableCacheRecord) SizeVT() (n int) {
 	return n
 }
 
+func (m *CacheRecordInputs) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Inputs) > 0 {
+		for _, e := range m.Inputs {
+			l = e.SizeVT()
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
 func (m *CacheRecordInput) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -2693,11 +2798,9 @@ func (m *BytesMessage) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if len(m.Data) > 0 {
-		for _, b := range m.Data {
-			l = len(b)
-			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-		}
+	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -3479,40 +3582,6 @@ func (m *ImportRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Layers", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Layers = append(m.Layers, &CacheLayer{})
-			if err := m.Layers[len(m.Layers)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Records", wireType)
 			}
 			var msglen int
@@ -3596,6 +3665,40 @@ func (m *ImportResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: ImportResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Attrs", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Attrs = append(m.Attrs, &KeyValue{})
+			if err := m.Attrs[len(m.Attrs)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -4856,6 +4959,91 @@ func (m *ExportableCacheRecord) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.Inputs = append(m.Inputs, &CacheRecordInputs{})
+			if err := m.Inputs[len(m.Inputs)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *CacheRecordInputs) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: CacheRecordInputs: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: CacheRecordInputs: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Inputs", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
 			m.Inputs = append(m.Inputs, &CacheRecordInput{})
 			if err := m.Inputs[len(m.Inputs)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -5043,8 +5231,10 @@ func (m *BytesMessage) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Data = append(m.Data, make([]byte, postIndex-iNdEx))
-			copy(m.Data[len(m.Data)-1], dAtA[iNdEx:postIndex])
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

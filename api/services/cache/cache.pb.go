@@ -391,8 +391,7 @@ func (x *RecordResponse) GetLayers() []*CacheLayer {
 
 type ImportRequest struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
-	Layers        []*CacheLayer            `protobuf:"bytes,1,rep,name=layers,proto3" json:"layers,omitempty"`
-	Records       []*ExportableCacheRecord `protobuf:"bytes,2,rep,name=records,proto3" json:"records,omitempty"`
+	Records       []*ExportableCacheRecord `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -427,13 +426,6 @@ func (*ImportRequest) Descriptor() ([]byte, []int) {
 	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ImportRequest) GetLayers() []*CacheLayer {
-	if x != nil {
-		return x.Layers
-	}
-	return nil
-}
-
 func (x *ImportRequest) GetRecords() []*ExportableCacheRecord {
 	if x != nil {
 		return x.Records
@@ -443,6 +435,7 @@ func (x *ImportRequest) GetRecords() []*ExportableCacheRecord {
 
 type ImportResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Attrs         []*KeyValue            `protobuf:"bytes,1,rep,name=attrs,proto3" json:"attrs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -475,6 +468,13 @@ func (x *ImportResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ImportResponse.ProtoReflect.Descriptor instead.
 func (*ImportResponse) Descriptor() ([]byte, []int) {
 	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ImportResponse) GetAttrs() []*KeyValue {
+	if x != nil {
+		return x.Attrs
+	}
+	return nil
 }
 
 type LayerInfoRequest struct {
@@ -1037,7 +1037,7 @@ type ExportableCacheRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Layers        []*CacheLayer          `protobuf:"bytes,1,rep,name=layers,proto3" json:"layers,omitempty"`
 	Digest        string                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
-	Inputs        []*CacheRecordInput    `protobuf:"bytes,3,rep,name=inputs,proto3" json:"inputs,omitempty"`
+	Inputs        []*CacheRecordInputs   `protobuf:"bytes,3,rep,name=inputs,proto3" json:"inputs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1086,7 +1086,51 @@ func (x *ExportableCacheRecord) GetDigest() string {
 	return ""
 }
 
-func (x *ExportableCacheRecord) GetInputs() []*CacheRecordInput {
+func (x *ExportableCacheRecord) GetInputs() []*CacheRecordInputs {
+	if x != nil {
+		return x.Inputs
+	}
+	return nil
+}
+
+type CacheRecordInputs struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Inputs        []*CacheRecordInput    `protobuf:"bytes,1,rep,name=inputs,proto3" json:"inputs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CacheRecordInputs) Reset() {
+	*x = CacheRecordInputs{}
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CacheRecordInputs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CacheRecordInputs) ProtoMessage() {}
+
+func (x *CacheRecordInputs) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CacheRecordInputs.ProtoReflect.Descriptor instead.
+func (*CacheRecordInputs) Descriptor() ([]byte, []int) {
+	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *CacheRecordInputs) GetInputs() []*CacheRecordInput {
 	if x != nil {
 		return x.Inputs
 	}
@@ -1103,7 +1147,7 @@ type CacheRecordInput struct {
 
 func (x *CacheRecordInput) Reset() {
 	*x = CacheRecordInput{}
-	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[22]
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1115,7 +1159,7 @@ func (x *CacheRecordInput) String() string {
 func (*CacheRecordInput) ProtoMessage() {}
 
 func (x *CacheRecordInput) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[22]
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1128,7 +1172,7 @@ func (x *CacheRecordInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CacheRecordInput.ProtoReflect.Descriptor instead.
 func (*CacheRecordInput) Descriptor() ([]byte, []int) {
-	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{22}
+	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CacheRecordInput) GetLinkIndex() int64 {
@@ -1147,14 +1191,14 @@ func (x *CacheRecordInput) GetSelector() string {
 
 type BytesMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          [][]byte               `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
+	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BytesMessage) Reset() {
 	*x = BytesMessage{}
-	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[23]
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1166,7 +1210,7 @@ func (x *BytesMessage) String() string {
 func (*BytesMessage) ProtoMessage() {}
 
 func (x *BytesMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[23]
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1179,10 +1223,10 @@ func (x *BytesMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BytesMessage.ProtoReflect.Descriptor instead.
 func (*BytesMessage) Descriptor() ([]byte, []int) {
-	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{23}
+	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{24}
 }
 
-func (x *BytesMessage) GetData() [][]byte {
+func (x *BytesMessage) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
@@ -1199,7 +1243,7 @@ type KeyValue struct {
 
 func (x *KeyValue) Reset() {
 	*x = KeyValue{}
-	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[24]
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1211,7 +1255,7 @@ func (x *KeyValue) String() string {
 func (*KeyValue) ProtoMessage() {}
 
 func (x *KeyValue) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[24]
+	mi := &file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1224,7 +1268,7 @@ func (x *KeyValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KeyValue.ProtoReflect.Descriptor instead.
 func (*KeyValue) Descriptor() ([]byte, []int) {
-	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{24}
+	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *KeyValue) GetKey() string {
@@ -1265,11 +1309,11 @@ const file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDesc = "" 
 	"\rRecordRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"L\n" +
 	"\x0eRecordResponse\x12:\n" +
-	"\x06layers\x18\x01 \x03(\v2\".moby.buildkit.v1.cache.CacheLayerR\x06layers\"\x94\x01\n" +
-	"\rImportRequest\x12:\n" +
-	"\x06layers\x18\x01 \x03(\v2\".moby.buildkit.v1.cache.CacheLayerR\x06layers\x12G\n" +
-	"\arecords\x18\x02 \x03(\v2-.moby.buildkit.v1.cache.ExportableCacheRecordR\arecords\"\x10\n" +
-	"\x0eImportResponse\"*\n" +
+	"\x06layers\x18\x01 \x03(\v2\".moby.buildkit.v1.cache.CacheLayerR\x06layers\"X\n" +
+	"\rImportRequest\x12G\n" +
+	"\arecords\x18\x01 \x03(\v2-.moby.buildkit.v1.cache.ExportableCacheRecordR\arecords\"H\n" +
+	"\x0eImportResponse\x126\n" +
+	"\x05attrs\x18\x01 \x03(\v2 .moby.buildkit.v1.cache.KeyValueR\x05attrs\"*\n" +
 	"\x10LayerInfoRequest\x12\x16\n" +
 	"\x06digest\x18\x01 \x01(\tR\x06digest\"M\n" +
 	"\x11LayerInfoResponse\x128\n" +
@@ -1307,17 +1351,19 @@ const file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDesc = "" 
 	"\x13CacheLayerReference\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x03R\x05index\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x02 \x01(\x03R\tcreatedAt\"\xad\x01\n" +
+	"created_at\x18\x02 \x01(\x03R\tcreatedAt\"\xae\x01\n" +
 	"\x15ExportableCacheRecord\x12:\n" +
 	"\x06layers\x18\x01 \x03(\v2\".moby.buildkit.v1.cache.CacheLayerR\x06layers\x12\x16\n" +
-	"\x06digest\x18\x02 \x01(\tR\x06digest\x12@\n" +
-	"\x06inputs\x18\x03 \x03(\v2(.moby.buildkit.v1.cache.CacheRecordInputR\x06inputs\"M\n" +
+	"\x06digest\x18\x02 \x01(\tR\x06digest\x12A\n" +
+	"\x06inputs\x18\x03 \x03(\v2).moby.buildkit.v1.cache.CacheRecordInputsR\x06inputs\"U\n" +
+	"\x11CacheRecordInputs\x12@\n" +
+	"\x06inputs\x18\x01 \x03(\v2(.moby.buildkit.v1.cache.CacheRecordInputR\x06inputs\"M\n" +
 	"\x10CacheRecordInput\x12\x1d\n" +
 	"\n" +
 	"link_index\x18\x01 \x01(\x03R\tlinkIndex\x12\x1a\n" +
 	"\bselector\x18\x02 \x01(\tR\bselector\"\"\n" +
 	"\fBytesMessage\x12\x12\n" +
-	"\x04data\x18\x01 \x03(\fR\x04data\"2\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"2\n" +
 	"\bKeyValue\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value2\xd7\x03\n" +
@@ -1346,7 +1392,7 @@ func file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescGZIP() 
 	return file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescData
 }
 
-var file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_github_com_moby_buildkit_api_services_cache_cache_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_github_com_moby_buildkit_api_services_cache_cache_proto_goTypes = []any{
 	(*InitializeRequest)(nil),     // 0: moby.buildkit.v1.cache.InitializeRequest
 	(*InitializeResponse)(nil),    // 1: moby.buildkit.v1.cache.InitializeResponse
@@ -1370,44 +1416,46 @@ var file_github_com_moby_buildkit_api_services_cache_cache_proto_goTypes = []any
 	(*CacheLayer)(nil),            // 19: moby.buildkit.v1.cache.CacheLayer
 	(*CacheLayerReference)(nil),   // 20: moby.buildkit.v1.cache.CacheLayerReference
 	(*ExportableCacheRecord)(nil), // 21: moby.buildkit.v1.cache.ExportableCacheRecord
-	(*CacheRecordInput)(nil),      // 22: moby.buildkit.v1.cache.CacheRecordInput
-	(*BytesMessage)(nil),          // 23: moby.buildkit.v1.cache.BytesMessage
-	(*KeyValue)(nil),              // 24: moby.buildkit.v1.cache.KeyValue
+	(*CacheRecordInputs)(nil),     // 22: moby.buildkit.v1.cache.CacheRecordInputs
+	(*CacheRecordInput)(nil),      // 23: moby.buildkit.v1.cache.CacheRecordInput
+	(*BytesMessage)(nil),          // 24: moby.buildkit.v1.cache.BytesMessage
+	(*KeyValue)(nil),              // 25: moby.buildkit.v1.cache.KeyValue
 }
 var file_github_com_moby_buildkit_api_services_cache_cache_proto_depIdxs = []int32{
-	24, // 0: moby.buildkit.v1.cache.InitializeRequest.attrs:type_name -> moby.buildkit.v1.cache.KeyValue
+	25, // 0: moby.buildkit.v1.cache.InitializeRequest.attrs:type_name -> moby.buildkit.v1.cache.KeyValue
 	16, // 1: moby.buildkit.v1.cache.InitializeResponse.caps:type_name -> moby.buildkit.v1.cache.Capabilities
 	17, // 2: moby.buildkit.v1.cache.QueryRequest.deps:type_name -> moby.buildkit.v1.cache.CacheKeyWithSelector
 	18, // 3: moby.buildkit.v1.cache.RecordsResponse.records:type_name -> moby.buildkit.v1.cache.CacheRecord
 	19, // 4: moby.buildkit.v1.cache.RecordResponse.layers:type_name -> moby.buildkit.v1.cache.CacheLayer
-	19, // 5: moby.buildkit.v1.cache.ImportRequest.layers:type_name -> moby.buildkit.v1.cache.CacheLayer
-	21, // 6: moby.buildkit.v1.cache.ImportRequest.records:type_name -> moby.buildkit.v1.cache.ExportableCacheRecord
+	21, // 5: moby.buildkit.v1.cache.ImportRequest.records:type_name -> moby.buildkit.v1.cache.ExportableCacheRecord
+	25, // 6: moby.buildkit.v1.cache.ImportResponse.attrs:type_name -> moby.buildkit.v1.cache.KeyValue
 	19, // 7: moby.buildkit.v1.cache.LayerInfoResponse.layer:type_name -> moby.buildkit.v1.cache.CacheLayer
 	19, // 8: moby.buildkit.v1.cache.ExportableCacheRecord.layers:type_name -> moby.buildkit.v1.cache.CacheLayer
-	22, // 9: moby.buildkit.v1.cache.ExportableCacheRecord.inputs:type_name -> moby.buildkit.v1.cache.CacheRecordInput
-	0,  // 10: moby.buildkit.v1.cache.CacheManager.Initialize:input_type -> moby.buildkit.v1.cache.InitializeRequest
-	2,  // 11: moby.buildkit.v1.cache.CacheManager.Query:input_type -> moby.buildkit.v1.cache.QueryRequest
-	4,  // 12: moby.buildkit.v1.cache.CacheManager.Records:input_type -> moby.buildkit.v1.cache.RecordsRequest
-	6,  // 13: moby.buildkit.v1.cache.CacheManager.Record:input_type -> moby.buildkit.v1.cache.RecordRequest
-	8,  // 14: moby.buildkit.v1.cache.CacheManager.Import:input_type -> moby.buildkit.v1.cache.ImportRequest
-	10, // 15: moby.buildkit.v1.cache.CacheStorage.Info:input_type -> moby.buildkit.v1.cache.LayerInfoRequest
-	12, // 16: moby.buildkit.v1.cache.CacheStorage.Get:input_type -> moby.buildkit.v1.cache.LayerGetRequest
-	23, // 17: moby.buildkit.v1.cache.CacheStorage.Upload:input_type -> moby.buildkit.v1.cache.BytesMessage
-	14, // 18: moby.buildkit.v1.cache.CacheStorage.Commit:input_type -> moby.buildkit.v1.cache.LayerCommitRequest
-	1,  // 19: moby.buildkit.v1.cache.CacheManager.Initialize:output_type -> moby.buildkit.v1.cache.InitializeResponse
-	3,  // 20: moby.buildkit.v1.cache.CacheManager.Query:output_type -> moby.buildkit.v1.cache.QueryResponse
-	5,  // 21: moby.buildkit.v1.cache.CacheManager.Records:output_type -> moby.buildkit.v1.cache.RecordsResponse
-	7,  // 22: moby.buildkit.v1.cache.CacheManager.Record:output_type -> moby.buildkit.v1.cache.RecordResponse
-	9,  // 23: moby.buildkit.v1.cache.CacheManager.Import:output_type -> moby.buildkit.v1.cache.ImportResponse
-	11, // 24: moby.buildkit.v1.cache.CacheStorage.Info:output_type -> moby.buildkit.v1.cache.LayerInfoResponse
-	23, // 25: moby.buildkit.v1.cache.CacheStorage.Get:output_type -> moby.buildkit.v1.cache.BytesMessage
-	13, // 26: moby.buildkit.v1.cache.CacheStorage.Upload:output_type -> moby.buildkit.v1.cache.LayerUploadResponse
-	15, // 27: moby.buildkit.v1.cache.CacheStorage.Commit:output_type -> moby.buildkit.v1.cache.LayerCommitResponse
-	19, // [19:28] is the sub-list for method output_type
-	10, // [10:19] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	22, // 9: moby.buildkit.v1.cache.ExportableCacheRecord.inputs:type_name -> moby.buildkit.v1.cache.CacheRecordInputs
+	23, // 10: moby.buildkit.v1.cache.CacheRecordInputs.inputs:type_name -> moby.buildkit.v1.cache.CacheRecordInput
+	0,  // 11: moby.buildkit.v1.cache.CacheManager.Initialize:input_type -> moby.buildkit.v1.cache.InitializeRequest
+	2,  // 12: moby.buildkit.v1.cache.CacheManager.Query:input_type -> moby.buildkit.v1.cache.QueryRequest
+	4,  // 13: moby.buildkit.v1.cache.CacheManager.Records:input_type -> moby.buildkit.v1.cache.RecordsRequest
+	6,  // 14: moby.buildkit.v1.cache.CacheManager.Record:input_type -> moby.buildkit.v1.cache.RecordRequest
+	8,  // 15: moby.buildkit.v1.cache.CacheManager.Import:input_type -> moby.buildkit.v1.cache.ImportRequest
+	10, // 16: moby.buildkit.v1.cache.CacheStorage.Info:input_type -> moby.buildkit.v1.cache.LayerInfoRequest
+	12, // 17: moby.buildkit.v1.cache.CacheStorage.Get:input_type -> moby.buildkit.v1.cache.LayerGetRequest
+	24, // 18: moby.buildkit.v1.cache.CacheStorage.Upload:input_type -> moby.buildkit.v1.cache.BytesMessage
+	14, // 19: moby.buildkit.v1.cache.CacheStorage.Commit:input_type -> moby.buildkit.v1.cache.LayerCommitRequest
+	1,  // 20: moby.buildkit.v1.cache.CacheManager.Initialize:output_type -> moby.buildkit.v1.cache.InitializeResponse
+	3,  // 21: moby.buildkit.v1.cache.CacheManager.Query:output_type -> moby.buildkit.v1.cache.QueryResponse
+	5,  // 22: moby.buildkit.v1.cache.CacheManager.Records:output_type -> moby.buildkit.v1.cache.RecordsResponse
+	7,  // 23: moby.buildkit.v1.cache.CacheManager.Record:output_type -> moby.buildkit.v1.cache.RecordResponse
+	9,  // 24: moby.buildkit.v1.cache.CacheManager.Import:output_type -> moby.buildkit.v1.cache.ImportResponse
+	11, // 25: moby.buildkit.v1.cache.CacheStorage.Info:output_type -> moby.buildkit.v1.cache.LayerInfoResponse
+	24, // 26: moby.buildkit.v1.cache.CacheStorage.Get:output_type -> moby.buildkit.v1.cache.BytesMessage
+	13, // 27: moby.buildkit.v1.cache.CacheStorage.Upload:output_type -> moby.buildkit.v1.cache.LayerUploadResponse
+	15, // 28: moby.buildkit.v1.cache.CacheStorage.Commit:output_type -> moby.buildkit.v1.cache.LayerCommitResponse
+	20, // [20:29] is the sub-list for method output_type
+	11, // [11:20] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_github_com_moby_buildkit_api_services_cache_cache_proto_init() }
@@ -1421,7 +1469,7 @@ func file_github_com_moby_buildkit_api_services_cache_cache_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDesc), len(file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

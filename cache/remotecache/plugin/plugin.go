@@ -20,6 +20,7 @@ import (
 	"github.com/moby/buildkit/solver"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/compression"
+	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/progress"
 	"github.com/moby/buildkit/worker"
@@ -204,6 +205,8 @@ func (i *importer) Resolve(ctx context.Context, desc ocispecs.Descriptor, id str
 		id:     id,
 		config: i.config,
 		w:      w,
+		cm:     cacheservice.NewCacheManagerClient(i.cc),
+		cs:     cacheservice.NewCacheStorageClient(i.cc),
 	}
 	if i.tp != nil {
 		cm.tracer = i.tp.Tracer(pkgpath)
@@ -216,13 +219,16 @@ type cacheManager struct {
 	config Config
 	w      worker.Worker
 	tracer trace.Tracer
+
+	cm cacheservice.CacheManagerClient
+	cs cacheservice.CacheStorageClient
 }
 
 func (cm *cacheManager) ID() string {
 	return cm.id
 }
 
-func (cm *cacheManager) Query(ctx context.Context, inp []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
+func (cm *cacheManager) Query(ctx context.Context, deps []solver.CacheKeyWithSelector, inputIndex solver.Index, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
 	if cm.tracer != nil {
 		var span trace.Span
 		ctx, span = cm.tracer.Start(ctx, "(*cacheManager).Query",
@@ -235,7 +241,29 @@ func (cm *cacheManager) Query(ctx context.Context, inp []solver.CacheKeyWithSele
 		defer span.End()
 	}
 
-	panic("implement me")
+	req := &cacheservice.QueryRequest{
+		Digest:     string(outputKey(dgst, int(outputIndex))),
+		InputIndex: int32(inputIndex),
+	}
+	for _, dep := range deps {
+		req.Deps = append(req.Deps, &cacheservice.CacheKeyWithSelector{
+			Id:       dep.CacheKey.ID,
+			Selector: string(dep.Selector),
+		})
+	}
+
+	resp, err := cm.cm.Query(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := make([]*solver.CacheKey, 0, len(resp.CacheKeys))
+	for _, ck := range resp.CacheKeys {
+		k := solver.NewCacheKey(dgst, "", outputIndex)
+		k.ID = ck
+		keys = append(keys, k)
+	}
+	return keys, nil
 }
 
 func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.CacheRecord, error) {
@@ -248,7 +276,24 @@ func (cm *cacheManager) Records(ctx context.Context, ck *solver.CacheKey) ([]*so
 		defer span.End()
 	}
 
-	panic("implement me")
+	req := &cacheservice.RecordsRequest{Id: ck.ID}
+	resp, err := cm.cm.Records(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	records := make([]*solver.CacheRecord, 0, len(resp.Records))
+	for _, r := range resp.Records {
+		var createdAt time.Time
+		if r.CreatedAt != 0 {
+			createdAt = time.Unix(r.CreatedAt, 0).UTC()
+		}
+		records = append(records, &solver.CacheRecord{
+			ID:        r.Id,
+			CreatedAt: createdAt,
+		})
+	}
+	return records, nil
 }
 
 func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solver.Result, error) {
@@ -261,7 +306,82 @@ func (cm *cacheManager) Load(ctx context.Context, rec *solver.CacheRecord) (solv
 		defer span.End()
 	}
 
-	panic("implement me")
+	layers, err := cm.loadManifest(ctx, rec)
+	if err != nil {
+		return nil, err
+	}
+
+	mp := contentutil.NewMultiProvider(nil)
+	remote := &solver.Remote{}
+	for _, l := range layers {
+		descPair := v1.DescriptorProviderPair{
+			Descriptor: ocispecs.Descriptor{
+				MediaType: l.Annotations.MediaType,
+				Digest:    l.Blob,
+				Size:      l.Annotations.Size,
+				Annotations: map[string]string{
+					labels.LabelUncompressed: l.Annotations.DiffID.String(),
+				},
+			},
+			Provider: cm,
+		}
+		if !l.Annotations.CreatedAt.IsZero() {
+			txt, err := l.Annotations.CreatedAt.MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			descPair.Descriptor.Annotations["buildkit/createdat"] = string(txt)
+		}
+		remote.Descriptors = append(remote.Descriptors, descPair.Descriptor)
+		mp.Add(descPair.Descriptor.Digest, descPair)
+	}
+	remote.Provider = mp
+
+	ref, err := cm.w.FromRemote(ctx, remote)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load result from remote")
+	}
+	return worker.NewWorkerRefResult(ref, cm.w), nil
+}
+
+func (cm *cacheManager) loadManifest(ctx context.Context, rec *solver.CacheRecord) ([]*cacheimporttypes.CacheLayer, error) {
+	req := &cacheservice.RecordRequest{Id: rec.ID}
+	resp, err := cm.cm.Record(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	layers := make([]*cacheimporttypes.CacheLayer, len(resp.Layers))
+	indexByDigest := make(map[digest.Digest]int)
+	for i, layer := range resp.Layers {
+		l := &cacheimporttypes.CacheLayer{
+			Blob: digest.Digest(layer.BlobDigest),
+			// Fill this in later after seeing the digests.
+			// This is the default value if we don't have a parent.
+			ParentIndex: -1,
+			Annotations: &cacheimporttypes.LayerAnnotations{
+				MediaType: layer.MediaType,
+				DiffID:    digest.Digest(layer.DiffId),
+				Size:      int64(layer.Size),
+				CreatedAt: time.Unix(layer.CreatedAt, 0).UTC(),
+			},
+		}
+		layers[i] = l
+		indexByDigest[l.Blob] = i
+	}
+
+	for i, layer := range resp.Layers {
+		if layer.ParentBlobDigest == "" {
+			continue
+		}
+
+		index, ok := indexByDigest[digest.Digest(layer.ParentBlobDigest)]
+		if !ok {
+			return nil, errors.Errorf("parent digest %s for %s not included in the returned layers", layer.ParentBlobDigest, layer.BlobDigest)
+		}
+		layers[i].ParentIndex = index
+	}
+	return layers, nil
 }
 
 func (cm *cacheManager) Save(key *solver.CacheKey, s solver.Result, createdAt time.Time) (*solver.ExportableCacheKey, error) {
@@ -478,3 +598,7 @@ func newSectionReader(ra content.ReaderAt, n int64) io.Reader {
 }
 
 func (*nopCloserSectionReader) Close() error { return nil }
+
+func outputKey(dgst digest.Digest, idx int) digest.Digest {
+	return digest.FromBytes(fmt.Appendf(nil, "%s@%d", dgst, idx))
+}

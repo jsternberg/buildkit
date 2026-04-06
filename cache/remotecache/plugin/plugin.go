@@ -95,7 +95,7 @@ func (p *pluginResolver) Resolve(ctx context.Context, attrs map[string]string) (
 	}
 
 	pr, pw := net.Pipe()
-	cmd := exec.Command(name)
+	cmd := exec.Command(fmt.Sprintf("buildkit-cache-%s", name))
 	cmd.Stdin = pr
 	cmd.Stdout = pr
 

@@ -206,7 +206,6 @@ func (i *importer) Resolve(ctx context.Context, desc ocispecs.Descriptor, id str
 		config: i.config,
 		w:      w,
 		cm:     cacheservice.NewCacheManagerClient(i.cc),
-		cs:     cacheservice.NewCacheStorageClient(i.cc),
 	}
 	if i.tp != nil {
 		cm.tracer = i.tp.Tracer(pkgpath)
@@ -221,7 +220,6 @@ type cacheManager struct {
 	tracer trace.Tracer
 
 	cm cacheservice.CacheManagerClient
-	cs cacheservice.CacheStorageClient
 }
 
 func (cm *cacheManager) ID() string {
@@ -425,7 +423,7 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 		close(tasks)
 	}()
 
-	storageClient := cacheservice.NewCacheStorageClient(e.cc)
+	cm := cacheservice.NewCacheManagerClient(e.cc)
 	for range e.config.UploadParallelism {
 		eg.Go(func() error {
 			for index := range tasks {
@@ -446,14 +444,14 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 					return errors.Wrapf(err, "failed to parse uncompressed annotation")
 				}
 
-				if _, err := storageClient.Info(groupCtx, &cacheservice.LayerInfoRequest{
+				if _, err := cm.LayerInfo(groupCtx, &cacheservice.LayerInfoRequest{
 					Digest: string(dgstPair.Descriptor.Digest),
 				}); err != nil {
 					if grpcerrors.Code(err) != codes.NotFound {
 						return errors.Wrapf(err, "failed to check file presence in cache")
 					}
 
-					if err := e.writeLayer(groupCtx, storageClient, blob, dgstPair); err != nil {
+					if err := e.writeLayer(groupCtx, cm, blob, dgstPair); err != nil {
 						return err
 					}
 				}
@@ -537,7 +535,7 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 	return attrs, nil
 }
 
-func (e *exporter) writeLayer(ctx context.Context, storageClient cacheservice.CacheStorageClient, blob digest.Digest, dgstPair v1.DescriptorProviderPair) (retErr error) {
+func (e *exporter) writeLayer(ctx context.Context, client cacheservice.CacheManagerClient, blob digest.Digest, dgstPair v1.DescriptorProviderPair) (retErr error) {
 	layerDone := progress.OneOff(ctx, fmt.Sprintf("writing layer %s", blob))
 	defer func() { layerDone(retErr) }()
 
@@ -547,7 +545,7 @@ func (e *exporter) writeLayer(ctx context.Context, storageClient cacheservice.Ca
 	}
 	defer ra.Close()
 
-	ingester, err := storageClient.Upload(ctx)
+	ingester, err := client.LayerUpload(ctx)
 	if err != nil {
 		return err
 	}
@@ -585,7 +583,7 @@ func (e *exporter) writeLayer(ctx context.Context, storageClient cacheservice.Ca
 		Digest: string(blob),
 	}
 
-	_, err = storageClient.Commit(ctx, req)
+	_, err = client.LayerCommit(ctx, req)
 	return err
 }
 

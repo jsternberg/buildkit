@@ -19,11 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CacheManager_Initialize_FullMethodName = "/moby.buildkit.v1.cache.CacheManager/Initialize"
-	CacheManager_Query_FullMethodName      = "/moby.buildkit.v1.cache.CacheManager/Query"
-	CacheManager_Records_FullMethodName    = "/moby.buildkit.v1.cache.CacheManager/Records"
-	CacheManager_Record_FullMethodName     = "/moby.buildkit.v1.cache.CacheManager/Record"
-	CacheManager_Import_FullMethodName     = "/moby.buildkit.v1.cache.CacheManager/Import"
+	CacheManager_Initialize_FullMethodName  = "/moby.buildkit.v1.cache.CacheManager/Initialize"
+	CacheManager_Query_FullMethodName       = "/moby.buildkit.v1.cache.CacheManager/Query"
+	CacheManager_Records_FullMethodName     = "/moby.buildkit.v1.cache.CacheManager/Records"
+	CacheManager_Record_FullMethodName      = "/moby.buildkit.v1.cache.CacheManager/Record"
+	CacheManager_Import_FullMethodName      = "/moby.buildkit.v1.cache.CacheManager/Import"
+	CacheManager_LayerInfo_FullMethodName   = "/moby.buildkit.v1.cache.CacheManager/LayerInfo"
+	CacheManager_LayerGet_FullMethodName    = "/moby.buildkit.v1.cache.CacheManager/LayerGet"
+	CacheManager_LayerUpload_FullMethodName = "/moby.buildkit.v1.cache.CacheManager/LayerUpload"
+	CacheManager_LayerCommit_FullMethodName = "/moby.buildkit.v1.cache.CacheManager/LayerCommit"
 )
 
 // CacheManagerClient is the client API for CacheManager service.
@@ -35,6 +39,10 @@ type CacheManagerClient interface {
 	Records(ctx context.Context, in *RecordsRequest, opts ...grpc.CallOption) (*RecordsResponse, error)
 	Record(ctx context.Context, in *RecordRequest, opts ...grpc.CallOption) (*RecordResponse, error)
 	Import(ctx context.Context, in *ImportRequest, opts ...grpc.CallOption) (*ImportResponse, error)
+	LayerInfo(ctx context.Context, in *LayerInfoRequest, opts ...grpc.CallOption) (*LayerInfoResponse, error)
+	LayerGet(ctx context.Context, in *LayerGetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BytesMessage], error)
+	LayerUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[BytesMessage, LayerUploadResponse], error)
+	LayerCommit(ctx context.Context, in *LayerCommitRequest, opts ...grpc.CallOption) (*LayerCommitResponse, error)
 }
 
 type cacheManagerClient struct {
@@ -95,6 +103,58 @@ func (c *cacheManagerClient) Import(ctx context.Context, in *ImportRequest, opts
 	return out, nil
 }
 
+func (c *cacheManagerClient) LayerInfo(ctx context.Context, in *LayerInfoRequest, opts ...grpc.CallOption) (*LayerInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LayerInfoResponse)
+	err := c.cc.Invoke(ctx, CacheManager_LayerInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cacheManagerClient) LayerGet(ctx context.Context, in *LayerGetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BytesMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &CacheManager_ServiceDesc.Streams[0], CacheManager_LayerGet_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[LayerGetRequest, BytesMessage]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CacheManager_LayerGetClient = grpc.ServerStreamingClient[BytesMessage]
+
+func (c *cacheManagerClient) LayerUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[BytesMessage, LayerUploadResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &CacheManager_ServiceDesc.Streams[1], CacheManager_LayerUpload_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[BytesMessage, LayerUploadResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CacheManager_LayerUploadClient = grpc.ClientStreamingClient[BytesMessage, LayerUploadResponse]
+
+func (c *cacheManagerClient) LayerCommit(ctx context.Context, in *LayerCommitRequest, opts ...grpc.CallOption) (*LayerCommitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LayerCommitResponse)
+	err := c.cc.Invoke(ctx, CacheManager_LayerCommit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CacheManagerServer is the server API for CacheManager service.
 // All implementations should embed UnimplementedCacheManagerServer
 // for forward compatibility.
@@ -104,6 +164,10 @@ type CacheManagerServer interface {
 	Records(context.Context, *RecordsRequest) (*RecordsResponse, error)
 	Record(context.Context, *RecordRequest) (*RecordResponse, error)
 	Import(context.Context, *ImportRequest) (*ImportResponse, error)
+	LayerInfo(context.Context, *LayerInfoRequest) (*LayerInfoResponse, error)
+	LayerGet(*LayerGetRequest, grpc.ServerStreamingServer[BytesMessage]) error
+	LayerUpload(grpc.ClientStreamingServer[BytesMessage, LayerUploadResponse]) error
+	LayerCommit(context.Context, *LayerCommitRequest) (*LayerCommitResponse, error)
 }
 
 // UnimplementedCacheManagerServer should be embedded to have
@@ -127,6 +191,18 @@ func (UnimplementedCacheManagerServer) Record(context.Context, *RecordRequest) (
 }
 func (UnimplementedCacheManagerServer) Import(context.Context, *ImportRequest) (*ImportResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Import not implemented")
+}
+func (UnimplementedCacheManagerServer) LayerInfo(context.Context, *LayerInfoRequest) (*LayerInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LayerInfo not implemented")
+}
+func (UnimplementedCacheManagerServer) LayerGet(*LayerGetRequest, grpc.ServerStreamingServer[BytesMessage]) error {
+	return status.Errorf(codes.Unimplemented, "method LayerGet not implemented")
+}
+func (UnimplementedCacheManagerServer) LayerUpload(grpc.ClientStreamingServer[BytesMessage, LayerUploadResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method LayerUpload not implemented")
+}
+func (UnimplementedCacheManagerServer) LayerCommit(context.Context, *LayerCommitRequest) (*LayerCommitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LayerCommit not implemented")
 }
 func (UnimplementedCacheManagerServer) testEmbeddedByValue() {}
 
@@ -238,6 +314,60 @@ func _CacheManager_Import_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CacheManager_LayerInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LayerInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheManagerServer).LayerInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheManager_LayerInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheManagerServer).LayerInfo(ctx, req.(*LayerInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CacheManager_LayerGet_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(LayerGetRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(CacheManagerServer).LayerGet(m, &grpc.GenericServerStream[LayerGetRequest, BytesMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CacheManager_LayerGetServer = grpc.ServerStreamingServer[BytesMessage]
+
+func _CacheManager_LayerUpload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(CacheManagerServer).LayerUpload(&grpc.GenericServerStream[BytesMessage, LayerUploadResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CacheManager_LayerUploadServer = grpc.ClientStreamingServer[BytesMessage, LayerUploadResponse]
+
+func _CacheManager_LayerCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LayerCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheManagerServer).LayerCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheManager_LayerCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheManagerServer).LayerCommit(ctx, req.(*LayerCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CacheManager_ServiceDesc is the grpc.ServiceDesc for CacheManager service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -265,216 +395,24 @@ var CacheManager_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Import",
 			Handler:    _CacheManager_Import_Handler,
 		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "github.com/moby/buildkit/api/services/cache/cache.proto",
-}
-
-const (
-	CacheStorage_Info_FullMethodName   = "/moby.buildkit.v1.cache.CacheStorage/Info"
-	CacheStorage_Get_FullMethodName    = "/moby.buildkit.v1.cache.CacheStorage/Get"
-	CacheStorage_Upload_FullMethodName = "/moby.buildkit.v1.cache.CacheStorage/Upload"
-	CacheStorage_Commit_FullMethodName = "/moby.buildkit.v1.cache.CacheStorage/Commit"
-)
-
-// CacheStorageClient is the client API for CacheStorage service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type CacheStorageClient interface {
-	Info(ctx context.Context, in *LayerInfoRequest, opts ...grpc.CallOption) (*LayerInfoResponse, error)
-	Get(ctx context.Context, in *LayerGetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BytesMessage], error)
-	Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[BytesMessage, LayerUploadResponse], error)
-	Commit(ctx context.Context, in *LayerCommitRequest, opts ...grpc.CallOption) (*LayerCommitResponse, error)
-}
-
-type cacheStorageClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewCacheStorageClient(cc grpc.ClientConnInterface) CacheStorageClient {
-	return &cacheStorageClient{cc}
-}
-
-func (c *cacheStorageClient) Info(ctx context.Context, in *LayerInfoRequest, opts ...grpc.CallOption) (*LayerInfoResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LayerInfoResponse)
-	err := c.cc.Invoke(ctx, CacheStorage_Info_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *cacheStorageClient) Get(ctx context.Context, in *LayerGetRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BytesMessage], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &CacheStorage_ServiceDesc.Streams[0], CacheStorage_Get_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[LayerGetRequest, BytesMessage]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type CacheStorage_GetClient = grpc.ServerStreamingClient[BytesMessage]
-
-func (c *cacheStorageClient) Upload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[BytesMessage, LayerUploadResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &CacheStorage_ServiceDesc.Streams[1], CacheStorage_Upload_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[BytesMessage, LayerUploadResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type CacheStorage_UploadClient = grpc.ClientStreamingClient[BytesMessage, LayerUploadResponse]
-
-func (c *cacheStorageClient) Commit(ctx context.Context, in *LayerCommitRequest, opts ...grpc.CallOption) (*LayerCommitResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LayerCommitResponse)
-	err := c.cc.Invoke(ctx, CacheStorage_Commit_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// CacheStorageServer is the server API for CacheStorage service.
-// All implementations should embed UnimplementedCacheStorageServer
-// for forward compatibility.
-type CacheStorageServer interface {
-	Info(context.Context, *LayerInfoRequest) (*LayerInfoResponse, error)
-	Get(*LayerGetRequest, grpc.ServerStreamingServer[BytesMessage]) error
-	Upload(grpc.ClientStreamingServer[BytesMessage, LayerUploadResponse]) error
-	Commit(context.Context, *LayerCommitRequest) (*LayerCommitResponse, error)
-}
-
-// UnimplementedCacheStorageServer should be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedCacheStorageServer struct{}
-
-func (UnimplementedCacheStorageServer) Info(context.Context, *LayerInfoRequest) (*LayerInfoResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Info not implemented")
-}
-func (UnimplementedCacheStorageServer) Get(*LayerGetRequest, grpc.ServerStreamingServer[BytesMessage]) error {
-	return status.Errorf(codes.Unimplemented, "method Get not implemented")
-}
-func (UnimplementedCacheStorageServer) Upload(grpc.ClientStreamingServer[BytesMessage, LayerUploadResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method Upload not implemented")
-}
-func (UnimplementedCacheStorageServer) Commit(context.Context, *LayerCommitRequest) (*LayerCommitResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Commit not implemented")
-}
-func (UnimplementedCacheStorageServer) testEmbeddedByValue() {}
-
-// UnsafeCacheStorageServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to CacheStorageServer will
-// result in compilation errors.
-type UnsafeCacheStorageServer interface {
-	mustEmbedUnimplementedCacheStorageServer()
-}
-
-func RegisterCacheStorageServer(s grpc.ServiceRegistrar, srv CacheStorageServer) {
-	// If the following call pancis, it indicates UnimplementedCacheStorageServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&CacheStorage_ServiceDesc, srv)
-}
-
-func _CacheStorage_Info_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LayerInfoRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CacheStorageServer).Info(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CacheStorage_Info_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CacheStorageServer).Info(ctx, req.(*LayerInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CacheStorage_Get_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(LayerGetRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(CacheStorageServer).Get(m, &grpc.GenericServerStream[LayerGetRequest, BytesMessage]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type CacheStorage_GetServer = grpc.ServerStreamingServer[BytesMessage]
-
-func _CacheStorage_Upload_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(CacheStorageServer).Upload(&grpc.GenericServerStream[BytesMessage, LayerUploadResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type CacheStorage_UploadServer = grpc.ClientStreamingServer[BytesMessage, LayerUploadResponse]
-
-func _CacheStorage_Commit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LayerCommitRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CacheStorageServer).Commit(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CacheStorage_Commit_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CacheStorageServer).Commit(ctx, req.(*LayerCommitRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// CacheStorage_ServiceDesc is the grpc.ServiceDesc for CacheStorage service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var CacheStorage_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "moby.buildkit.v1.cache.CacheStorage",
-	HandlerType: (*CacheStorageServer)(nil),
-	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Info",
-			Handler:    _CacheStorage_Info_Handler,
+			MethodName: "LayerInfo",
+			Handler:    _CacheManager_LayerInfo_Handler,
 		},
 		{
-			MethodName: "Commit",
-			Handler:    _CacheStorage_Commit_Handler,
+			MethodName: "LayerCommit",
+			Handler:    _CacheManager_LayerCommit_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Get",
-			Handler:       _CacheStorage_Get_Handler,
+			StreamName:    "LayerGet",
+			Handler:       _CacheManager_LayerGet_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "Upload",
-			Handler:       _CacheStorage_Upload_Handler,
+			StreamName:    "LayerUpload",
+			Handler:       _CacheManager_LayerUpload_Handler,
 			ClientStreams: true,
 		},
 	},

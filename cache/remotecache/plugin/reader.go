@@ -18,7 +18,7 @@ func (cm *cacheManager) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) 
 			Offset: uint64(offset),
 		}
 
-		resp, err := cm.cs.Get(ctx, in)
+		resp, err := cm.cm.LayerGet(ctx, in)
 		if err != nil {
 			return nil, err
 		}

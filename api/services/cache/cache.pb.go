@@ -1366,19 +1366,18 @@ const file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDesc = "" 
 	"\x04data\x18\x01 \x01(\fR\x04data\"2\n" +
 	"\bKeyValue\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value2\xd7\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value2\xe2\x06\n" +
 	"\fCacheManager\x12c\n" +
 	"\n" +
 	"Initialize\x12).moby.buildkit.v1.cache.InitializeRequest\x1a*.moby.buildkit.v1.cache.InitializeResponse\x12T\n" +
 	"\x05Query\x12$.moby.buildkit.v1.cache.QueryRequest\x1a%.moby.buildkit.v1.cache.QueryResponse\x12Z\n" +
 	"\aRecords\x12&.moby.buildkit.v1.cache.RecordsRequest\x1a'.moby.buildkit.v1.cache.RecordsResponse\x12W\n" +
 	"\x06Record\x12%.moby.buildkit.v1.cache.RecordRequest\x1a&.moby.buildkit.v1.cache.RecordResponse\x12W\n" +
-	"\x06Import\x12%.moby.buildkit.v1.cache.ImportRequest\x1a&.moby.buildkit.v1.cache.ImportResponse2\x85\x03\n" +
-	"\fCacheStorage\x12[\n" +
-	"\x04Info\x12(.moby.buildkit.v1.cache.LayerInfoRequest\x1a).moby.buildkit.v1.cache.LayerInfoResponse\x12V\n" +
-	"\x03Get\x12'.moby.buildkit.v1.cache.LayerGetRequest\x1a$.moby.buildkit.v1.cache.BytesMessage0\x01\x12]\n" +
-	"\x06Upload\x12$.moby.buildkit.v1.cache.BytesMessage\x1a+.moby.buildkit.v1.cache.LayerUploadResponse(\x01\x12a\n" +
-	"\x06Commit\x12*.moby.buildkit.v1.cache.LayerCommitRequest\x1a+.moby.buildkit.v1.cache.LayerCommitResponseB>Z<github.com/moby/buildkit/api/services/cache;moby_buildkit_v1b\x06proto3"
+	"\x06Import\x12%.moby.buildkit.v1.cache.ImportRequest\x1a&.moby.buildkit.v1.cache.ImportResponse\x12`\n" +
+	"\tLayerInfo\x12(.moby.buildkit.v1.cache.LayerInfoRequest\x1a).moby.buildkit.v1.cache.LayerInfoResponse\x12[\n" +
+	"\bLayerGet\x12'.moby.buildkit.v1.cache.LayerGetRequest\x1a$.moby.buildkit.v1.cache.BytesMessage0\x01\x12b\n" +
+	"\vLayerUpload\x12$.moby.buildkit.v1.cache.BytesMessage\x1a+.moby.buildkit.v1.cache.LayerUploadResponse(\x01\x12f\n" +
+	"\vLayerCommit\x12*.moby.buildkit.v1.cache.LayerCommitRequest\x1a+.moby.buildkit.v1.cache.LayerCommitResponseB>Z<github.com/moby/buildkit/api/services/cache;moby_buildkit_v1b\x06proto3"
 
 var (
 	file_github_com_moby_buildkit_api_services_cache_cache_proto_rawDescOnce sync.Once
@@ -1438,19 +1437,19 @@ var file_github_com_moby_buildkit_api_services_cache_cache_proto_depIdxs = []int
 	4,  // 13: moby.buildkit.v1.cache.CacheManager.Records:input_type -> moby.buildkit.v1.cache.RecordsRequest
 	6,  // 14: moby.buildkit.v1.cache.CacheManager.Record:input_type -> moby.buildkit.v1.cache.RecordRequest
 	8,  // 15: moby.buildkit.v1.cache.CacheManager.Import:input_type -> moby.buildkit.v1.cache.ImportRequest
-	10, // 16: moby.buildkit.v1.cache.CacheStorage.Info:input_type -> moby.buildkit.v1.cache.LayerInfoRequest
-	12, // 17: moby.buildkit.v1.cache.CacheStorage.Get:input_type -> moby.buildkit.v1.cache.LayerGetRequest
-	24, // 18: moby.buildkit.v1.cache.CacheStorage.Upload:input_type -> moby.buildkit.v1.cache.BytesMessage
-	14, // 19: moby.buildkit.v1.cache.CacheStorage.Commit:input_type -> moby.buildkit.v1.cache.LayerCommitRequest
+	10, // 16: moby.buildkit.v1.cache.CacheManager.LayerInfo:input_type -> moby.buildkit.v1.cache.LayerInfoRequest
+	12, // 17: moby.buildkit.v1.cache.CacheManager.LayerGet:input_type -> moby.buildkit.v1.cache.LayerGetRequest
+	24, // 18: moby.buildkit.v1.cache.CacheManager.LayerUpload:input_type -> moby.buildkit.v1.cache.BytesMessage
+	14, // 19: moby.buildkit.v1.cache.CacheManager.LayerCommit:input_type -> moby.buildkit.v1.cache.LayerCommitRequest
 	1,  // 20: moby.buildkit.v1.cache.CacheManager.Initialize:output_type -> moby.buildkit.v1.cache.InitializeResponse
 	3,  // 21: moby.buildkit.v1.cache.CacheManager.Query:output_type -> moby.buildkit.v1.cache.QueryResponse
 	5,  // 22: moby.buildkit.v1.cache.CacheManager.Records:output_type -> moby.buildkit.v1.cache.RecordsResponse
 	7,  // 23: moby.buildkit.v1.cache.CacheManager.Record:output_type -> moby.buildkit.v1.cache.RecordResponse
 	9,  // 24: moby.buildkit.v1.cache.CacheManager.Import:output_type -> moby.buildkit.v1.cache.ImportResponse
-	11, // 25: moby.buildkit.v1.cache.CacheStorage.Info:output_type -> moby.buildkit.v1.cache.LayerInfoResponse
-	24, // 26: moby.buildkit.v1.cache.CacheStorage.Get:output_type -> moby.buildkit.v1.cache.BytesMessage
-	13, // 27: moby.buildkit.v1.cache.CacheStorage.Upload:output_type -> moby.buildkit.v1.cache.LayerUploadResponse
-	15, // 28: moby.buildkit.v1.cache.CacheStorage.Commit:output_type -> moby.buildkit.v1.cache.LayerCommitResponse
+	11, // 25: moby.buildkit.v1.cache.CacheManager.LayerInfo:output_type -> moby.buildkit.v1.cache.LayerInfoResponse
+	24, // 26: moby.buildkit.v1.cache.CacheManager.LayerGet:output_type -> moby.buildkit.v1.cache.BytesMessage
+	13, // 27: moby.buildkit.v1.cache.CacheManager.LayerUpload:output_type -> moby.buildkit.v1.cache.LayerUploadResponse
+	15, // 28: moby.buildkit.v1.cache.CacheManager.LayerCommit:output_type -> moby.buildkit.v1.cache.LayerCommitResponse
 	20, // [20:29] is the sub-list for method output_type
 	11, // [11:20] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
@@ -1471,7 +1470,7 @@ func file_github_com_moby_buildkit_api_services_cache_cache_proto_init() {
 			NumEnums:      0,
 			NumMessages:   26,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   1,
 		},
 		GoTypes:           file_github_com_moby_buildkit_api_services_cache_cache_proto_goTypes,
 		DependencyIndexes: file_github_com_moby_buildkit_api_services_cache_cache_proto_depIdxs,

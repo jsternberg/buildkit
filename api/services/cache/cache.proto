@@ -10,13 +10,11 @@ service CacheManager {
   rpc Records(RecordsRequest) returns (RecordsResponse);
   rpc Record(RecordRequest) returns (RecordResponse);
   rpc Import(ImportRequest) returns (ImportResponse);
-}
 
-service CacheStorage {
-  rpc Info(LayerInfoRequest) returns (LayerInfoResponse);
-  rpc Get(LayerGetRequest) returns (stream BytesMessage);
-  rpc Upload(stream BytesMessage) returns (LayerUploadResponse);
-  rpc Commit(LayerCommitRequest) returns (LayerCommitResponse);
+  rpc LayerInfo(LayerInfoRequest) returns (LayerInfoResponse);
+  rpc LayerGet(LayerGetRequest) returns (stream BytesMessage);
+  rpc LayerUpload(stream BytesMessage) returns (LayerUploadResponse);
+  rpc LayerCommit(LayerCommitRequest) returns (LayerCommitResponse);
 }
 
 message InitializeRequest {

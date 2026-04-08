@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -70,17 +72,17 @@ func getConfig(attrs map[string]string) (Config, error) {
 	}, nil
 }
 
-type pluginResolver struct {
+type PluginResolver struct {
 	tp      trace.TracerProvider
 	plugins map[string]*plugin
 	mu      sync.Mutex
 }
 
-func newPluginResolver(tp trace.TracerProvider) *pluginResolver {
-	return &pluginResolver{tp: tp}
+func NewPluginResolver(tp trace.TracerProvider) *PluginResolver {
+	return &PluginResolver{tp: tp}
 }
 
-func (p *pluginResolver) Resolve(ctx context.Context, attrs map[string]string) (*plugin, error) {
+func (p *PluginResolver) Resolve(ctx context.Context, attrs map[string]string) (*plugin, error) {
 	config, err := getConfig(attrs)
 	if err != nil {
 		return nil, err
@@ -94,38 +96,51 @@ func (p *pluginResolver) Resolve(ctx context.Context, attrs map[string]string) (
 		return pl, nil
 	}
 
-	pr, pw := net.Pipe()
-	cmd := exec.Command(fmt.Sprintf("buildkit-cache-%s", name))
-	cmd.Stdin = pr
-	cmd.Stdout = pr
+	dir, err := os.MkdirTemp("", "buildkit-cache-plugin")
+	if err != nil {
+		return nil, err
+	}
 
-	cc, err := grpc.NewClient("passthrough://",
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			return pw, nil
-		}),
+	socketPath := filepath.Join(dir, "plugin.sock")
+	cmd := exec.Command(fmt.Sprintf("buildkit-cache-%s", name), socketPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	cc, err := grpc.NewClient("unix://"+socketPath,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	pl := &plugin{
-		cc:     cc,
+		cc:     cacheservice.NewCacheManagerClient(cc),
 		config: config,
+		cmd:    cmd,
+		tp:     p.tp,
 	}
 	if p.plugins == nil {
 		p.plugins = make(map[string]*plugin)
 	}
+	bklog.G(ctx).Info("attempting to initialize plugin")
 	if err := pl.Initialize(ctx, attrs); err != nil {
+		bklog.G(ctx).Infof("error during plugin initialization: %s", err)
 		if closeErr := pl.Close(); closeErr != nil {
 			bklog.G(ctx).Warnf("plugin close failed after a failed initialization: %s", closeErr)
 		}
 		return nil, err
 	}
+	bklog.G(ctx).Infof("successfully initialized plugin: %s", name)
 	p.plugins[name] = pl
 	return pl, nil
 }
 
-func (p *pluginResolver) ImporterFunc(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Importer, ocispecs.Descriptor, error) {
+func (p *PluginResolver) ImporterFunc(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Importer, ocispecs.Descriptor, error) {
 	pl, err := p.Resolve(ctx, attrs)
 	if err != nil {
 		return nil, ocispecs.Descriptor{}, err
@@ -133,7 +148,7 @@ func (p *pluginResolver) ImporterFunc(ctx context.Context, g session.Group, attr
 	return pl, ocispecs.Descriptor{}, nil
 }
 
-func (p *pluginResolver) ExporterFunc(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Exporter, error) {
+func (p *PluginResolver) ExporterFunc(ctx context.Context, g session.Group, attrs map[string]string) (remotecache.Exporter, error) {
 	pl, err := p.Resolve(ctx, attrs)
 	if err != nil {
 		return nil, err
@@ -148,19 +163,18 @@ func (p *pluginResolver) ExporterFunc(ctx context.Context, g session.Group, attr
 	}, nil
 }
 
-func (p *pluginResolver) Close() error {
+func (p *PluginResolver) Close() error {
 	return nil
 }
 
 type plugin struct {
-	cc     *grpc.ClientConn
+	cc     cacheservice.CacheManagerClient
 	config Config
+	cmd    *exec.Cmd
 	tp     trace.TracerProvider
 }
 
 func (p *plugin) Initialize(ctx context.Context, attrs map[string]string) error {
-	cm := cacheservice.NewCacheManagerClient(p.cc)
-
 	req := &cacheservice.InitializeRequest{}
 	for k, v := range attrs {
 		req.Attrs = append(req.Attrs, &cacheservice.KeyValue{
@@ -169,7 +183,7 @@ func (p *plugin) Initialize(ctx context.Context, attrs map[string]string) error 
 		})
 	}
 
-	_, err := cm.Initialize(ctx, req)
+	_, err := p.cc.Initialize(ctx, req)
 	return err
 }
 
@@ -178,6 +192,7 @@ func (p *plugin) Resolve(ctx context.Context, desc ocispecs.Descriptor, id strin
 		id:     id,
 		config: p.config,
 		w:      w,
+		cm:     p.cc,
 	}
 	if p.tp != nil {
 		cm.tracer = p.tp.Tracer(pkgpath)
@@ -186,31 +201,14 @@ func (p *plugin) Resolve(ctx context.Context, desc ocispecs.Descriptor, id strin
 }
 
 func (p *plugin) Close() error {
-	return nil
-}
-
-func ResolveCacheFuncs(tp trace.TracerProvider) (remotecache.ResolveCacheImporterFunc, remotecache.ResolveCacheExporterFunc, func() error) {
-	pr := newPluginResolver(tp)
-	return pr.ImporterFunc, pr.ExporterFunc, pr.Close
-}
-
-type importer struct {
-	cc     *grpc.ClientConn
-	config Config
-	tp     trace.TracerProvider
-}
-
-func (i *importer) Resolve(ctx context.Context, desc ocispecs.Descriptor, id string, w worker.Worker) (solver.CacheManager, error) {
-	cm := &cacheManager{
-		id:     id,
-		config: i.config,
-		w:      w,
-		cm:     cacheservice.NewCacheManagerClient(i.cc),
+	if p.cmd == nil {
+		return nil
 	}
-	if i.tp != nil {
-		cm.tracer = i.tp.Tracer(pkgpath)
+
+	if err := p.cmd.Process.Kill(); err != nil {
+		return err
 	}
-	return cm, nil
+	return p.cmd.Wait()
 }
 
 type cacheManager struct {
@@ -392,7 +390,7 @@ func (cm *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
 
 type exporter struct {
 	solver.CacheExporterTarget
-	cc     *grpc.ClientConn
+	cc     cacheservice.CacheManagerClient
 	chains *v1.CacheChains
 	config Config
 }
@@ -423,7 +421,6 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 		close(tasks)
 	}()
 
-	cm := cacheservice.NewCacheManagerClient(e.cc)
 	for range e.config.UploadParallelism {
 		eg.Go(func() error {
 			for index := range tasks {
@@ -444,16 +441,14 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 					return errors.Wrapf(err, "failed to parse uncompressed annotation")
 				}
 
-				if _, err := cm.LayerInfo(groupCtx, &cacheservice.LayerInfoRequest{
+				if layer, err := e.cc.LayerInfo(groupCtx, &cacheservice.LayerInfoRequest{
 					Digest: string(dgstPair.Descriptor.Digest),
-				}); err != nil {
-					if grpcerrors.Code(err) != codes.NotFound {
-						return errors.Wrapf(err, "failed to check file presence in cache")
-					}
-
-					if err := e.writeLayer(groupCtx, cm, blob, dgstPair); err != nil {
+				}); layer.Layer == nil || (err != nil && grpcerrors.Code(err) == codes.NotFound) {
+					if err := e.writeLayer(groupCtx, blob, dgstPair); err != nil {
 						return err
 					}
+				} else if err != nil {
+					return errors.Wrapf(err, "failed to check file presence in cache")
 				}
 
 				la := &cacheimporttypes.LayerAnnotations{
@@ -519,8 +514,7 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 		req.Records = append(req.Records, r)
 	}
 
-	cacheClient := cacheservice.NewCacheManagerClient(e.cc)
-	resp, err := cacheClient.Import(ctx, req)
+	resp, err := e.cc.Import(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +529,7 @@ func (e *exporter) Finalize(ctx context.Context) (map[string]string, error) {
 	return attrs, nil
 }
 
-func (e *exporter) writeLayer(ctx context.Context, client cacheservice.CacheManagerClient, blob digest.Digest, dgstPair v1.DescriptorProviderPair) (retErr error) {
+func (e *exporter) writeLayer(ctx context.Context, blob digest.Digest, dgstPair v1.DescriptorProviderPair) (retErr error) {
 	layerDone := progress.OneOff(ctx, fmt.Sprintf("writing layer %s", blob))
 	defer func() { layerDone(retErr) }()
 
@@ -545,7 +539,7 @@ func (e *exporter) writeLayer(ctx context.Context, client cacheservice.CacheMana
 	}
 	defer ra.Close()
 
-	ingester, err := client.LayerUpload(ctx)
+	ingester, err := e.cc.LayerUpload(ctx)
 	if err != nil {
 		return err
 	}
@@ -580,10 +574,10 @@ func (e *exporter) writeLayer(ctx context.Context, client cacheservice.CacheMana
 
 	req := &cacheservice.LayerCommitRequest{
 		Id:     upload.Id,
-		Digest: string(blob),
+		Digest: blob.Encoded(),
 	}
 
-	_, err = client.LayerCommit(ctx, req)
+	_, err = e.cc.LayerCommit(ctx, req)
 	return err
 }
 

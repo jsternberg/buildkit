@@ -28,6 +28,7 @@ import (
 	httpremotecache "github.com/moby/buildkit/cache/remotecache/http"
 	inlineremotecache "github.com/moby/buildkit/cache/remotecache/inline"
 	localremotecache "github.com/moby/buildkit/cache/remotecache/local"
+	pluginremotecache "github.com/moby/buildkit/cache/remotecache/plugin"
 	registryremotecache "github.com/moby/buildkit/cache/remotecache/registry"
 	s3remotecache "github.com/moby/buildkit/cache/remotecache/s3"
 	"github.com/moby/buildkit/client"
@@ -849,6 +850,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp t
 		verifierProvider = newVerifierProvider(cfg.Root)
 	}
 
+	pluginResolver := pluginremotecache.NewPluginResolver(tp)
 	remoteCacheExporterFuncs := map[string]remotecache.ResolveCacheExporterFunc{
 		"registry": registryremotecache.ResolveCacheExporterFunc(sessionManager, resolverFn),
 		"local":    localremotecache.ResolveCacheExporterFunc(sessionManager),
@@ -857,6 +859,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp t
 		"s3":       s3remotecache.ResolveCacheExporterFunc(),
 		"azblob":   azblob.ResolveCacheExporterFunc(),
 		"http":     httpremotecache.ResolveCacheExporterFunc(),
+		"plugin":   pluginResolver.ExporterFunc,
 	}
 	remoteCacheImporterFuncs := map[string]remotecache.ResolveCacheImporterFunc{
 		"registry": registryremotecache.ResolveCacheImporterFunc(sessionManager, w.ContentStore(), resolverFn),
@@ -865,6 +868,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp t
 		"s3":       s3remotecache.ResolveCacheImporterFunc(),
 		"azblob":   azblob.ResolveCacheImporterFunc(),
 		"http":     httpremotecache.ResolveCacheImporterFunc(tp),
+		"plugin":   pluginResolver.ImporterFunc,
 	}
 
 	if cfg.CDI.Disabled == nil || !*cfg.CDI.Disabled {
@@ -882,6 +886,7 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config, tp t
 		Frontends:                 frontends,
 		ResolveCacheExporterFuncs: remoteCacheExporterFuncs,
 		ResolveCacheImporterFuncs: remoteCacheImporterFuncs,
+		PluginResolver:            pluginResolver,
 		CacheManager:              solver.NewCacheManager(context.TODO(), "local", cacheStorage, worker.NewCacheResultStorage(wc), solver.WithTracerProvider(tp)),
 		Entitlements:              cfg.Entitlements,
 		TraceCollector:            tc,

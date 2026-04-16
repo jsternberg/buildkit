@@ -57,6 +57,10 @@ func (cm *combinedCacheManager) Query(ctx context.Context, inp []CacheKeyWithSel
 			}
 			mu.Lock()
 			for _, r := range recs {
+				if _, ok := r.ids[c]; !ok {
+					r.ids[c] = r.ID
+				}
+
 				if _, ok := keys[r.ID]; !ok || c == cm.main {
 					keys[r.ID] = r
 				}
@@ -78,9 +82,18 @@ func (cm *combinedCacheManager) Query(ctx context.Context, inp []CacheKeyWithSel
 }
 
 func (cm *combinedCacheManager) Load(ctx context.Context, rec *CacheRecord) (res Result, err error) {
-	results, err := rec.cacheManager.LoadWithParents(ctx, rec)
-	if err != nil {
-		return nil, err
+	var results []LoadedResult
+	if cm, ok := rec.cacheManager.(*cacheManager); ok {
+		results, err = cm.LoadWithParents(ctx, rec)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		res, err := rec.cacheManager.Load(ctx, rec)
+		if err != nil {
+			return nil, err
+		}
+		results = []LoadedResult{{Result: res, CacheKey: rec.key, CacheResult: CacheResult{ID: rec.ID, CreatedAt: rec.CreatedAt}}}
 	}
 	defer func() {
 		ctx := context.WithoutCancel(ctx)
@@ -118,7 +131,7 @@ func (cm *combinedCacheManager) Records(ctx context.Context, ck *CacheKey) ([]*C
 		return nil, errors.Errorf("no results")
 	}
 
-	cms := make([]*cacheManager, 0, len(ck.ids))
+	cms := make([]CacheManager, 0, len(ck.ids))
 	for cm := range ck.ids {
 		cms = append(cms, cm)
 	}
@@ -136,6 +149,8 @@ func (cm *combinedCacheManager) Records(ctx context.Context, ck *CacheKey) ([]*C
 			}
 			mu.Lock()
 			for _, rec := range recs {
+				rec.cacheManager = c
+				rec.key = ck
 				if _, ok := records[rec.ID]; !ok || c == cm.main {
 					if c == cm.main {
 						rec.Priority = 1

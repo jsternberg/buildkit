@@ -18,6 +18,7 @@ import (
 	controlapi "github.com/moby/buildkit/api/services/control"
 	apitypes "github.com/moby/buildkit/api/types"
 	"github.com/moby/buildkit/cache/remotecache"
+	pluginremotecache "github.com/moby/buildkit/cache/remotecache/plugin"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/cmd/buildkitd/config"
@@ -66,6 +67,7 @@ type Opt struct {
 	CacheManager              solver.CacheManager
 	ResolveCacheExporterFuncs map[string]remotecache.ResolveCacheExporterFunc
 	ResolveCacheImporterFuncs map[string]remotecache.ResolveCacheImporterFunc
+	PluginResolver            *pluginremotecache.PluginResolver
 	Entitlements              []string
 	TraceCollector            sdktrace.SpanExporter
 	HistoryDB                 db.DB
@@ -87,6 +89,7 @@ type Controller struct { // TODO: ControlService
 	history                      *history.Queue
 	cache                        solver.CacheManager
 	gatewayForwarder             *controlgateway.GatewayForwarder
+	pluginResolver               *pluginremotecache.PluginResolver
 	throttledGC                  func()
 	throttledReleaseUnreferenced func()
 	gcmu                         sync.Mutex
@@ -130,6 +133,7 @@ func NewController(opt Opt) (*Controller, error) {
 		history:          hq,
 		cache:            opt.CacheManager,
 		gatewayForwarder: gatewayForwarder,
+		pluginResolver:   opt.PluginResolver,
 	}
 	c.throttledGC = throttle.After(time.Minute, c.gc)
 	// use longer interval for releaseUnreferencedCache deleting links quickly is less important
@@ -155,6 +159,11 @@ func (c *Controller) Close() error {
 	}
 	if err := c.solver.Close(); err != nil {
 		errs = append(errs, err)
+	}
+	if c.pluginResolver != nil {
+		if err := c.pluginResolver.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	return stderrors.Join(errs...)
 }

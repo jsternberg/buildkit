@@ -158,7 +158,12 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 				break
 			}
 		}
-		cm := v.cacheManager
+
+		cm, ok := v.cacheManager.(*cacheManager)
+		if !ok {
+			break
+		}
+
 		key := cm.getID(v.key)
 		res, err := cm.backend.Load(key, v.ID)
 		if err != nil {
@@ -259,9 +264,11 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 
 	if !opt.IgnoreBacklinks {
 		for cm, id := range k.ids {
-			_, err := addBacklinks(t, cm, id, bkm)
-			if err != nil {
-				return nil, err
+			if cm, ok := cm.(*cacheManager); ok {
+				_, err := addBacklinks(t, cm, id, bkm)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -275,29 +282,30 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 	}
 
 	if v != nil && len(deps) == 0 {
-		cm := v.cacheManager
-		key := cm.getID(v.key)
-		if err := cm.backend.WalkIDsByResult(v.ID, func(id string) error {
-			if id == key {
-				return nil
-			}
-			hasBacklinks := false
-			cm.backend.WalkBacklinks(id, func(id string, link CacheInfoLink) error {
-				hasBacklinks = true
-				return nil
-			})
-			if hasBacklinks {
-				return nil
-			}
+		if cm, ok := v.cacheManager.(*cacheManager); ok {
+			key := cm.getID(v.key)
+			if err := cm.backend.WalkIDsByResult(v.ID, func(id string) error {
+				if id == key {
+					return nil
+				}
+				hasBacklinks := false
+				cm.backend.WalkBacklinks(id, func(id string, link CacheInfoLink) error {
+					hasBacklinks = true
+					return nil
+				})
+				if hasBacklinks {
+					return nil
+				}
 
-			dgst, err := digest.Parse(id)
-			if err != nil {
-				return nil
+				dgst, err := digest.Parse(id)
+				if err != nil {
+					return nil
+				}
+				_, _, err = t.Add(dgst, nil, results)
+				return err
+			}); err != nil {
+				return nil, err
 			}
-			_, _, err = t.Add(dgst, nil, results)
-			return err
-		}); err != nil {
-			return nil, err
 		}
 	}
 

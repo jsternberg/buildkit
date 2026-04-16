@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package moby.buildkit.v1.cache;
+
+option go_package = "github.com/moby/buildkit/api/services/cache;moby_buildkit_v1";
+
+service CacheManager {
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  rpc Query(QueryRequest) returns (QueryResponse);
+  rpc Records(RecordsRequest) returns (RecordsResponse);
+  rpc Record(RecordRequest) returns (RecordResponse);
+  rpc Import(ImportRequest) returns (ImportResponse);
+
+  rpc LayerInfo(LayerInfoRequest) returns (LayerInfoResponse);
+  rpc LayerGet(LayerGetRequest) returns (stream BytesMessage);
+  rpc LayerUpload(stream BytesMessage) returns (LayerUploadResponse);
+  rpc LayerCommit(LayerCommitRequest) returns (LayerCommitResponse);
+}
+
+message InitializeRequest {
+  repeated KeyValue attrs = 1;
+}
+
+message InitializeResponse {
+  Capabilities caps = 1;
+}
+
+message QueryRequest {
+  repeated CacheKeyWithSelector deps = 1;
+  string digest = 2;
+  int32 input_index = 3;
+}
+
+message QueryResponse {
+  repeated string cache_keys = 1;
+}
+
+message RecordsRequest {
+  string id = 1;
+}
+
+message RecordsResponse {
+  repeated CacheRecord records = 1;
+}
+
+message RecordRequest {
+  string id = 1;
+}
+
+message RecordResponse {
+  repeated CacheLayer layers = 1;
+}
+
+message ImportRequest {
+  repeated ExportableCacheRecord records = 1;
+}
+
+message ImportResponse {
+  repeated KeyValue attrs = 1;
+}
+
+message LayerInfoRequest {
+  string digest = 1;
+}
+
+message LayerInfoResponse {
+  CacheLayer layer = 1;
+}
+
+message LayerGetRequest {
+  string digest = 1;
+  uint64 offset = 2;
+}
+
+message LayerUploadResponse {
+  string id = 1;
+  int64 expires_at = 2;
+}
+
+message LayerCommitRequest{
+  string id = 1;
+  string digest = 2;
+}
+
+message LayerCommitResponse {
+}
+
+message Capabilities {
+}
+
+message CacheKeyWithSelector {
+  string id = 1;
+  string selector = 2;
+}
+
+message CacheRecord {
+  string id = 1;
+  Timestamp created_at = 2;
+}
+
+message CacheLayer {
+  string blob_digest = 1;
+  string parent_blob_digest = 2;
+  string media_type = 3;
+  string diff_id = 4;
+  uint32 size = 5;
+  Timestamp created_at = 6;
+}
+
+message CacheLayerReference {
+  int64 index = 1;
+  Timestamp created_at = 2;
+}
+
+message ExportableCacheRecord {
+  repeated CacheLayer layers = 1;
+  string digest = 2;
+  repeated CacheRecordInputs inputs = 3;
+}
+
+message CacheRecordInputs {
+  repeated CacheRecordInput inputs = 1;
+}
+
+message CacheRecordInput {
+  int64 link_index = 1;
+  string selector = 2;
+}
+
+message BytesMessage {
+  bytes data = 1;
+}
+
+message KeyValue {
+  string key = 1;
+  string value = 2;
+}
+
+message Timestamp {
+  int64 seconds = 1;
+  uint32 nanoseconds = 2;
+}

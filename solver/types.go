@@ -252,7 +252,7 @@ type CacheRecord struct {
 	CreatedAt time.Time
 	Priority  int
 
-	cacheManager *cacheManager
+	cacheManager CacheManager
 	key          *CacheKey
 }
 

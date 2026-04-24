@@ -301,10 +301,10 @@ type CacheStorage interface {
 	Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error)
 
 	// Load loads a cache record into a result reference.
-	Load(ctx context.Context, key, id string) (Result, error)
+	Load(ctx context.Context, key *CacheKey, id string) (Result, error)
 
 	// Save saves a result based on a cache key
-	Save(key *CacheKey, s Result, createdAt time.Time) (*ExportableCacheKey, error)
+	Save(k *CacheKey, r Result, createdAt time.Time) (*CacheRecord, error)
 
 	ReleaseUnreferenced(context.Context) error
 }

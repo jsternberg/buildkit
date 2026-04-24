@@ -159,8 +159,8 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 			}
 		}
 		cm := v.cacheManager
-		key := cm.getID(v.key)
-		res, err := cm.backend.Load(key, v.ID)
+		ck := cm.getKey(v.key)
+		res, err := cm.backend.Load(ck.ID, v.ID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				v = nil
@@ -276,9 +276,9 @@ func (e *exporter) ExportTo(ctx context.Context, t CacheExporterTarget, opt Cach
 
 	if v != nil && len(deps) == 0 {
 		cm := v.cacheManager
-		key := cm.getID(v.key)
+		key := cm.getKey(v.key)
 		if err := cm.backend.WalkIDsByResult(v.ID, func(id string) error {
-			if id == key {
+			if id == key.ID {
 				return nil
 			}
 			hasBacklinks := false

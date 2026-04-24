@@ -99,19 +99,69 @@ func (c *kvCacheStorage) Records(ctx context.Context, ck *CacheKey) ([]*CacheRec
 	return outs, nil
 }
 
-func (c *kvCacheStorage) Load(ctx context.Context, key, id string) (Result, error) {
+func (c *kvCacheStorage) Load(ctx context.Context, key *CacheKey, id string) (Result, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	res, err := c.backend.Load(key, id)
+	res, err := c.backend.Load(key.ID, id)
 	if err != nil {
 		return nil, err
 	}
 	return c.results.Load(ctx, res)
 }
 
-func (c *kvCacheStorage) Save(key *CacheKey, s Result, createdAt time.Time) (*ExportableCacheKey, error) {
-	panic("implement me")
+func (c *kvCacheStorage) Save(k *CacheKey, r Result, createdAt time.Time) (*CacheRecord, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	res, err := c.results.Save(r, createdAt)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.backend.AddResult(k.ID, res); err != nil {
+		return nil, err
+	}
+
+	type link struct {
+		Source *CacheKey
+		Link   CacheInfoLink
+		Target string
+	}
+
+	getLinks := func(k *CacheKey) (links []link) {
+		for i, deps := range k.Deps() {
+			for _, ck := range deps {
+				l := CacheInfoLink{
+					Input:    Index(i),
+					Output:   k.Output(),
+					Digest:   k.Digest(),
+					Selector: ck.Selector,
+				}
+				links = append(links, link{
+					Source: ck.CacheKey.CacheKey,
+					Link:   l,
+					Target: k.ID,
+				})
+			}
+		}
+		return links
+	}
+
+	for pending := getLinks(k); len(pending) > 0; pending = pending[1:] {
+		l := pending[0]
+		if !c.backend.HasLink(l.Source.ID, l.Link, l.Target) {
+			if err := c.backend.AddLink(l.Source.ID, l.Link, l.Target); err != nil {
+				return nil, err
+			}
+			pending = append(pending, getLinks(l.Source)...)
+		}
+	}
+
+	return &CacheRecord{
+		ID:        res.ID,
+		CreatedAt: res.CreatedAt,
+	}, nil
 }
 
 func (c *kvCacheStorage) ReleaseUnreferenced(ctx context.Context) error {

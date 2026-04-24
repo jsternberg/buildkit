@@ -3,6 +3,7 @@ package solver
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,8 @@ func NewCacheManager(ctx context.Context, id string, storage CacheKeyStorage, re
 	cm := &cacheManager{
 		id:      id,
 		storage: newKvCacheStorage(storage, results),
+		backend: storage,
+		results: results,
 	}
 
 	if err := cm.ReleaseUnreferenced(ctx); err != nil {
@@ -74,7 +77,7 @@ func (c *cacheManager) Query(deps []CacheKeyWithSelector, input Index, dgst dige
 
 	// Resolve the ids for all dependencies.
 	for i, d := range deps {
-		deps[i].CacheKey.ID = c.getID(d.CacheKey.CacheKey)
+		deps[i].CacheKey.CacheKey = c.getKey(d.CacheKey.CacheKey)
 	}
 
 	keys, err := c.storage.Query(deps, input, dgst, output)
@@ -83,7 +86,7 @@ func (c *cacheManager) Query(deps []CacheKeyWithSelector, input Index, dgst dige
 	}
 
 	for i, ck := range keys {
-		keys[i].ids[c] = ck.ID
+		keys[i].keys[c] = ck
 	}
 	return keys, nil
 }
@@ -103,8 +106,7 @@ func (c *cacheManager) Records(ctx context.Context, ck *CacheKey) (rrecs []*Cach
 		lg.WithError(rerr).WithField("return_records", rrercsField).Trace("cache manager")
 	}()
 
-	ck.ID = c.getID(ck)
-	outs, err := c.storage.Records(ctx, ck)
+	outs, err := c.storage.Records(ctx, c.getKey(ck))
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +133,7 @@ func (c *cacheManager) Load(ctx context.Context, rec *CacheRecord) (rres Result,
 		lg.WithError(rerr).WithField("return_result", rresID).Trace("cache manager")
 	}()
 
-	return c.storage.Load(ctx, c.getID(rec.key), rec.ID)
+	return c.storage.Load(ctx, c.getKey(rec.key), rec.ID)
 }
 
 type LoadedResult struct {
@@ -204,7 +206,8 @@ func (c *cacheManager) LoadWithParents(ctx context.Context, rec *CacheRecord) (r
 	if err != nil {
 		return nil, err
 	}
-	return []LoadedResult{{Result: res, CacheKey: rec.key, CacheResult: CacheResult{ID: c.getID(rec.key), CreatedAt: rec.CreatedAt}}}, nil
+	key := c.getKey(rec.key)
+	return []LoadedResult{{Result: res, CacheKey: rec.key, CacheResult: CacheResult{ID: key.ID, CreatedAt: rec.CreatedAt}}}, nil
 
 	// lwp, ok := c.results.(interface {
 	// 	LoadWithParents(context.Context, CacheResult) (map[string]Result, error)
@@ -260,27 +263,13 @@ func (c *cacheManager) Save(k *CacheKey, r Result, createdAt time.Time) (rck *Ex
 		lg.Trace("cache manager")
 	}()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	res, err := c.results.Save(r, createdAt)
+	k = c.getKey(k)
+	rec, err := c.storage.Save(k, r, createdAt)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.backend.AddResult(c.getID(k), res); err != nil {
-		return nil, err
-	}
-
-	if err := c.ensurePersistentKey(k); err != nil {
-		return nil, err
-	}
-
-	rec := &CacheRecord{
-		ID:           res.ID,
-		cacheManager: c,
-		key:          k,
-		CreatedAt:    res.CreatedAt,
-	}
+	rec.cacheManager = c
+	rec.key = k
 
 	return &ExportableCacheKey{
 		CacheKey: k,
@@ -289,59 +278,68 @@ func (c *cacheManager) Save(k *CacheKey, r Result, createdAt time.Time) (rck *Ex
 }
 
 func newKey() *CacheKey {
-	return &CacheKey{ids: map[*cacheManager]string{}}
+	return &CacheKey{
+		keys: map[*cacheManager]*CacheKey{},
+		ids:  map[*cacheManager]string{},
+	}
 }
 
-func (c *cacheManager) getID(k *CacheKey) string {
+func (c *cacheManager) getKey(k *CacheKey) *CacheKey {
 	k.mu.Lock()
-	id, ok := k.ids[c]
+	ck, ok := k.keys[c]
 	if ok {
 		k.mu.Unlock()
-		return id
+		return ck
 	}
+
 	if len(k.deps) == 0 {
-		k.ids[c] = k.ID
+		k.keys[c] = k
 		k.mu.Unlock()
-		return k.ID
+		return k
 	}
-	id = c.getIDFromDeps(k)
-	k.ids[c] = id
+
+	ck = c.getKeyFromDeps(k)
+	k.keys[c] = ck
 	k.mu.Unlock()
-	return id
+	return ck
 }
 
-func (c *cacheManager) ensurePersistentKey(k *CacheKey) error {
-	id := c.getID(k)
-	for i, deps := range k.Deps() {
-		for _, ck := range deps {
-			l := CacheInfoLink{
-				Input:    Index(i),
-				Output:   k.Output(),
-				Digest:   k.Digest(),
-				Selector: ck.Selector,
-			}
-			ckID := c.getID(ck.CacheKey.CacheKey)
-			if !c.backend.HasLink(ckID, l, id) {
-				if err := c.ensurePersistentKey(ck.CacheKey.CacheKey); err != nil {
-					return err
-				}
-				if err := c.backend.AddLink(ckID, l, id); err != nil {
-					return err
-				}
-			}
+func (c *cacheManager) getKeyFromDeps(k *CacheKey) (ck *CacheKey) {
+	ck = k
+	if len(k.keys) > 0 {
+		// Cannot reuse this cache key so duplicate it so we can resolve
+		// the dependencies properly.
+		ck = &CacheKey{
+			digest: k.digest,
+			vtx:    k.vtx,
+			output: k.output,
+			keys:   map[*cacheManager]*CacheKey{},
+		}
+		// Resolve each of the dependencies so their ID matches with their real identity.
+		for _, dep := range k.deps {
+			dep = slices.Clone(dep)
+			ck.deps = append(ck.deps, dep)
+		}
+		ck.keys[c] = ck
+	}
+
+	// Resolve the dependency keys.
+	for _, dep := range ck.deps {
+		for i, d := range dep {
+			dep[i].CacheKey.CacheKey = c.getKey(d.CacheKey.CacheKey)
 		}
 	}
-	return nil
-}
 
-func (c *cacheManager) getIDFromDeps(k *CacheKey) (id string) {
 	defer func() {
-		if id == "" {
-			id = identity.NewID()
+		// If the ID could not be resolved, use a random id.
+		if ck.ID == "" {
+			ck.ID = identity.NewID()
 		}
 	}()
 
-	keys, err := c.storage.Query(k.deps[0], 0, k.Digest(), k.Output())
+	// Now that we've fully resolved our dependencies we can send a query request
+	// to each of them to determine a suitable identity.
+	keys, err := c.storage.Query(ck.deps[0], 0, ck.Digest(), ck.Output())
 	if err != nil {
 		return
 	}
@@ -351,12 +349,12 @@ func (c *cacheManager) getIDFromDeps(k *CacheKey) (id string) {
 		matches[k.ID] = struct{}{}
 	}
 
-	for i, deps := range k.deps[1:] {
+	for i, deps := range ck.deps[1:] {
 		if len(matches) == 0 {
 			break
 		}
 
-		keys, err := c.storage.Query(deps, Index(i+1), k.Digest(), k.Output())
+		keys, err := c.storage.Query(deps, Index(i+1), ck.Digest(), ck.Output())
 		if err != nil {
 			return
 		}
@@ -379,10 +377,10 @@ func (c *cacheManager) getIDFromDeps(k *CacheKey) (id string) {
 	}
 
 	for k := range matches {
-		id = k
+		ck.ID = k
 		break
 	}
-	return id
+	return
 }
 
 func rootKey(dgst digest.Digest, output Index) digest.Digest {

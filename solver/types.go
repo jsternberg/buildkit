@@ -291,3 +291,20 @@ type CacheManager interface {
 
 	ReleaseUnreferenced(context.Context) error
 }
+
+type CacheStorage interface {
+	// Query searches for cache paths from one cache key to the output of a
+	// possible match.
+	Query(deps []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
+
+	// Records returns the cache records associated with a cache key.
+	Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error)
+
+	// Load loads a cache record into a result reference.
+	Load(ctx context.Context, key, id string) (Result, error)
+
+	// Save saves a result based on a cache key
+	Save(key *CacheKey, s Result, createdAt time.Time) (*ExportableCacheKey, error)
+
+	ReleaseUnreferenced(context.Context) error
+}

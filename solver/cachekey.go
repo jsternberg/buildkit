@@ -16,7 +16,6 @@ func NewCacheKey(dgst, vtx digest.Digest, output Index) *CacheKey {
 		vtx:    vtx,
 		output: output,
 		keys:   map[*cacheManager]*CacheKey{},
-		ids:    map[*cacheManager]string{},
 	}
 }
 
@@ -44,7 +43,6 @@ type CacheKey struct {
 	vtx    digest.Digest
 	output Index
 	keys   map[*cacheManager]*CacheKey
-	ids    map[*cacheManager]string
 
 	indexIDs []string
 }

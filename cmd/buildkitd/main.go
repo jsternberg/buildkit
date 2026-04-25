@@ -39,8 +39,8 @@ import (
 	"github.com/moby/buildkit/frontend/gateway/forwarder"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver"
-	"github.com/moby/buildkit/solver/bboltcachestorage"
 	"github.com/moby/buildkit/solver/llbsolver/cdidevices"
+	"github.com/moby/buildkit/solver/sqlcachestorage"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/appdefaults"
@@ -825,11 +825,11 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 		frontends["gateway.v0"] = gwfe
 	}
 
-	cacheStorage, err := bboltcachestorage.NewStore(filepath.Join(cfg.Root, "cache.db"))
-	if err != nil {
-		return nil, err
-	}
-	cacheStoreForDebug = cacheStorage
+	// cacheStorage, err := bboltcachestorage.NewStore(filepath.Join(cfg.Root, "cache.db"))
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// cacheStoreForDebug = cacheStorage
 
 	historyDB, err := boltutil.SafeOpen(filepath.Join(cfg.Root, "history.db"), 0600, nil)
 	if err != nil {
@@ -873,13 +873,18 @@ func newController(ctx context.Context, c *cli.Context, cfg *config.Config) (*co
 		return nil, err
 	}
 
+	cacheStorage, err := sqlcachestorage.NewStore(filepath.Join(cfg.Root, "cache.db"), worker.NewCacheResultStorage(wc))
+	if err != nil {
+		return nil, err
+	}
+
 	return control.NewController(control.Opt{
 		SessionManager:            sessionManager,
 		WorkerController:          wc,
 		Frontends:                 frontends,
 		ResolveCacheExporterFuncs: remoteCacheExporterFuncs,
 		ResolveCacheImporterFuncs: remoteCacheImporterFuncs,
-		CacheManager:              solver.NewCacheManager(context.TODO(), "local", cacheStorage, worker.NewCacheResultStorage(wc)),
+		CacheManager:              solver.NewCacheStorage("local", cacheStorage),
 		Entitlements:              cfg.Entitlements,
 		TraceCollector:            tc,
 		HistoryDB:                 historyDB,

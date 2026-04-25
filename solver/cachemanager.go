@@ -25,8 +25,6 @@ func NewCacheManager(ctx context.Context, id string, storage CacheKeyStorage, re
 	cm := &cacheManager{
 		id:      id,
 		storage: newKvCacheStorage(storage, results),
-		backend: storage,
-		results: results,
 	}
 
 	if err := cm.ReleaseUnreferenced(ctx); err != nil {
@@ -36,13 +34,18 @@ func NewCacheManager(ctx context.Context, id string, storage CacheKeyStorage, re
 	return cm
 }
 
+func NewCacheStorage(id string, storage CacheStorage) CacheManager {
+	return &cacheManager{
+		id:      id,
+		storage: storage,
+	}
+}
+
 type cacheManager struct {
 	mu sync.RWMutex
 	id string
 
 	storage CacheStorage
-	backend CacheKeyStorage
-	results CacheResultStorage
 }
 
 func (c *cacheManager) ReleaseUnreferenced(ctx context.Context) error {
@@ -79,13 +82,19 @@ func (c *cacheManager) Query(deps []CacheKeyWithSelector, input Index, dgst dige
 	for i, d := range deps {
 		deps[i].CacheKey.CacheKey = c.getKey(d.CacheKey.CacheKey)
 	}
+	return c.query(deps, input, dgst, output)
+}
 
+func (c *cacheManager) query(deps []CacheKeyWithSelector, input Index, dgst digest.Digest, output Index) ([]*CacheKey, error) {
 	keys, err := c.storage.Query(deps, input, dgst, output)
 	if err != nil {
 		return nil, err
 	}
 
 	for i, ck := range keys {
+		if ck.keys == nil {
+			ck.keys = map[*cacheManager]*CacheKey{}
+		}
 		keys[i].keys[c] = ck
 	}
 	return keys, nil
@@ -280,7 +289,6 @@ func (c *cacheManager) Save(k *CacheKey, r Result, createdAt time.Time) (rck *Ex
 func newKey() *CacheKey {
 	return &CacheKey{
 		keys: map[*cacheManager]*CacheKey{},
-		ids:  map[*cacheManager]string{},
 	}
 }
 
@@ -339,7 +347,7 @@ func (c *cacheManager) getKeyFromDeps(k *CacheKey) (ck *CacheKey) {
 
 	// Now that we've fully resolved our dependencies we can send a query request
 	// to each of them to determine a suitable identity.
-	keys, err := c.storage.Query(ck.deps[0], 0, ck.Digest(), ck.Output())
+	keys, err := c.query(ck.deps[0], 0, ck.Digest(), ck.Output())
 	if err != nil {
 		return
 	}
@@ -354,7 +362,7 @@ func (c *cacheManager) getKeyFromDeps(k *CacheKey) (ck *CacheKey) {
 			break
 		}
 
-		keys, err := c.storage.Query(deps, Index(i+1), ck.Digest(), ck.Output())
+		keys, err := c.query(deps, Index(i+1), ck.Digest(), ck.Output())
 		if err != nil {
 			return
 		}
@@ -378,8 +386,10 @@ func (c *cacheManager) getKeyFromDeps(k *CacheKey) (ck *CacheKey) {
 
 	for k := range matches {
 		ck.ID = k
-		break
+		return
 	}
+
+	ck.ID = identity.NewID()
 	return
 }
 

@@ -3,19 +3,21 @@ package sqlcachestorage
 const (
 	CREATE_TABLE_LINKS_SQL = `
 CREATE TABLE IF NOT EXISTS links (
-    source_record text NOT NULL,
-    digest text NOT NULL,
-    input_index integer NOT NULL,
-		selector text,
-    target_record text NOT NULL
+	source_record text NOT NULL,
+	digest text NOT NULL,
+	input_index integer NOT NULL,
+	selector text,
+	target_record text NOT NULL,
+	UNIQUE (source_record, digest, input_index, selector, target_record)
 );
 `
 
 	CREATE_TABLE_RECORDS_SQL = `
 CREATE TABLE IF NOT EXISTS records (
-    id text NOT NULL,
-    record_id NOT NULL,
-    created_at datetime
+	id text NOT NULL,
+	record_id NOT NULL,
+	created_at datetime,
+	UNIQUE (id, record_id)
 );
 `
 
@@ -36,12 +38,14 @@ ON records (id, record_id);
 
 	INSERT_LINK_SQL = `
 INSERT INTO links (source_record, digest, input_index, target_record, selector)
-VALUES (?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT DO NOTHING;
 `
 
 	INSERT_RECORD_SQL = `
 INSERT INTO records (id, created_at, record_id)
-VALUES (?, ?, ?);
+VALUES (?, ?, ?)
+ON CONFLICT DO NOTHING;
 `
 
 	LINK_EXISTS_SQL = `

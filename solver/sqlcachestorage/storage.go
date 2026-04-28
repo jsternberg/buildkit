@@ -181,6 +181,11 @@ func (s *Store) Save(k *solver.CacheKey, r solver.Result, createdAt time.Time) (
 		return links
 	}
 
+	stmt, err := tx.Prepare(INSERT_LINK_SQL)
+	if err != nil {
+		return nil, err
+	}
+
 	for pending := getLinks(k); len(pending) > 0; {
 		l := pending[len(pending)-1]
 		pending = pending[:len(pending)-1]
@@ -190,7 +195,8 @@ func (s *Store) Save(k *solver.CacheKey, r solver.Result, createdAt time.Time) (
 		if l.Link.Selector != "" {
 			selector = l.Link.Selector
 		}
-		if _, err := tx.Exec(INSERT_LINK_SQL, l.Source.ID, dgst, int(l.Link.Input), l.Target, selector); err != nil {
+		if _, err := stmt.Exec(l.Source.ID, dgst, int(l.Link.Input), l.Target, selector); err != nil {
+			_ = stmt.Close()
 			return nil, err
 		}
 		pending = append(pending, getLinks(l.Source)...)

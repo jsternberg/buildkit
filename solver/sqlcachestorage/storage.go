@@ -181,11 +181,10 @@ func (s *Store) Save(k *solver.CacheKey, r solver.Result, createdAt time.Time) (
 		return links
 	}
 
-	for pending := getLinks(k); len(pending) > 0; pending = pending[1:] {
-		l := pending[0]
-		// TODO: check whether the link already exists before inserting to avoid
-		// duplicate rows. The SQL schema does not currently expose a HasLink
-		// helper analogous to the kv backend.
+	for pending := getLinks(k); len(pending) > 0; {
+		l := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+
 		dgst := rootKey(l.Link.Digest, l.Link.Output).String()
 		var selector any = nil
 		if l.Link.Selector != "" {

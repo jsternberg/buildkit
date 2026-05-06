@@ -167,8 +167,9 @@ func main() {
 			Usage: "enable debug output in logs",
 		},
 		cli.BoolFlag{
-			Name:  "trace",
-			Usage: "enable trace output in logs (highly verbose, could affect performance)",
+			Name:   "trace",
+			Usage:  "enable trace output in logs (highly verbose, could affect performance)",
+			Hidden: true,
 		},
 		cli.StringFlag{
 			Name:  "root",
@@ -185,6 +186,12 @@ func main() {
 			Name:  "log-format",
 			Usage: "log formatter: json or text",
 			Value: "text",
+		},
+		cli.StringFlag{
+			Name:   "log-level",
+			Usage:  "set the log level",
+			Value:  "info",
+			EnvVar: "BUILDKITD_LOG_LEVEL",
 		},
 		cli.StringFlag{
 			Name:  "group",
@@ -251,8 +258,18 @@ func main() {
 			return err
 		}
 
+		// Keep track of any warnings we need to print to the log and wait until after
+		// the logger is configured before we write them to the log file.
+		var warnings []string
+		if cfg.Debug { //nolint:staticcheck
+			warnings = append(warnings, "'debug' configuration option is deprecated, use 'log.level = \"debug\"' instead")
+		}
+		if cfg.Trace { //nolint:staticcheck
+			warnings = append(warnings, "'trace' configuration option is deprecated, use 'log.level = \"trace\"' instead")
+		}
+
 		setDefaultConfig(&cfg)
-		if err := applyMainFlags(c, &cfg); err != nil {
+		if err := applyMainFlags(c, &cfg, &warnings); err != nil {
 			return err
 		}
 
@@ -266,11 +283,25 @@ func main() {
 			return errors.Errorf("unsupported log type %q", logFormat)
 		}
 
-		if cfg.Debug {
+		if cfg.Debug { //nolint:staticcheck
 			logrus.SetLevel(logrus.DebugLevel)
 		}
-		if cfg.Trace {
+		if cfg.Trace { //nolint:staticcheck
 			logrus.SetLevel(logrus.TraceLevel)
+		}
+
+		if cfg.Log.Level != "" {
+			level, err := logrus.ParseLevel(cfg.Log.Level)
+			if err != nil {
+				return errors.Wrap(err, "unsupported log level")
+			}
+			logrus.SetLevel(level)
+		}
+
+		if logrus.IsLevelEnabled(logrus.WarnLevel) {
+			for _, w := range warnings {
+				bklog.G(ctx).Warn(w)
+			}
 		}
 
 		if sc := cfg.System; sc != nil {
@@ -585,18 +616,27 @@ func isRootlessConfig() bool {
 	return u != "" && u != "root"
 }
 
-func applyMainFlags(c *cli.Context, cfg *config.Config) error {
-	if c.IsSet("debug") {
-		cfg.Debug = c.Bool("debug")
+func applyMainFlags(c *cli.Context, cfg *config.Config, warnings *[]string) error {
+	if c.IsSet("debug") && c.Bool("debug") {
+		cfg.Log.Level = "debug"
 	}
 	if c.IsSet("trace") {
-		cfg.Trace = c.Bool("trace")
+		if warnings != nil {
+			*warnings = append(*warnings, "--trace option is deprecated; use --log-level=trace instead")
+		}
+
+		if c.Bool("trace") {
+			cfg.Log.Level = "trace"
+		}
 	}
 	if c.IsSet("root") {
 		cfg.Root = c.String("root")
 	}
 	if c.IsSet("log-format") {
 		cfg.Log.Format = c.String("log-format")
+	}
+	if c.IsSet("log-level") {
+		cfg.Log.Level = c.String("log-level")
 	}
 	if c.IsSet("addr") || len(cfg.GRPC.Address) == 0 {
 		cfg.GRPC.Address = c.StringSlice("addr")

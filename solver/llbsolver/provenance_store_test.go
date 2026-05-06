@@ -154,3 +154,50 @@ func TestProvenanceStoreAmbiguousDigest(t *testing.T) {
 	_, ok := store.lookup(pbDef)
 	require.False(t, ok)
 }
+
+func TestScrubMinRequestScrubsNestedRequests(t *testing.T) {
+	req := &provenancetypes.Parameters{
+		Args: map[string]string{
+			"build-arg:FOO": "bar",
+			"label:lbl":     "abc",
+			"context":       "input:base",
+		},
+		Secrets: []*provenancetypes.Secret{{ID: "secret"}},
+		SSH:     []*provenancetypes.SSH{{ID: "default"}},
+		Inputs: map[string]*provenancetypes.RequestProvenance{
+			"base": {
+				Request: &provenancetypes.Parameters{
+					Args: map[string]string{
+						"target":              "base",
+						"build-arg:BASE_TEXT": "from-input",
+						"label:input":         "nested",
+					},
+					Secrets: []*provenancetypes.Secret{{ID: "input-secret"}},
+					SSH:     []*provenancetypes.SSH{{ID: "input-ssh"}},
+				},
+			},
+		},
+		Root: &provenancetypes.RequestProvenance{
+			Request: &provenancetypes.Parameters{
+				Args: map[string]string{
+					"source":         "dockerfile.v0",
+					"build-arg:ROOT": "root",
+				},
+			},
+		},
+	}
+
+	require.True(t, scrubMinRequest(req))
+
+	require.Equal(t, map[string]string{"context": "input:base"}, req.Args)
+	require.Nil(t, req.Secrets)
+	require.Nil(t, req.SSH)
+
+	require.Contains(t, req.Inputs, "base")
+	require.Equal(t, map[string]string{"target": "base"}, req.Inputs["base"].Request.Args)
+	require.Nil(t, req.Inputs["base"].Request.Secrets)
+	require.Nil(t, req.Inputs["base"].Request.SSH)
+
+	require.NotNil(t, req.Root)
+	require.Equal(t, map[string]string{"source": "dockerfile.v0"}, req.Root.Request.Args)
+}

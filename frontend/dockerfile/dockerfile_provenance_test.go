@@ -1251,40 +1251,58 @@ func testGatewayProvenanceSameCallbackInputProducer(t *testing.T, sb integration
 		t.Skip(err.Error())
 	}
 	require.NoError(t, err)
-	target := registry + "/buildkit/provenance-input-same:latest"
-
 	f := getFrontend(t, sb)
 	dockerfile := provenanceInputDockerfile()
 	dir := integration.Tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
 
-	frontend := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-		st, metadata, err := solveProvenanceInputProducer(ctx, c, f)
-		if err != nil {
-			return nil, err
-		}
-		return solveProvenanceInputConsumer(ctx, c, f, st, metadata)
+	for _, tc := range []struct {
+		name           string
+		provenanceMode string
+		assert         func(*testing.T, frontendGateway, provenancetypes.ProvenancePredicateSLSA1)
+	}{
+		{
+			name:           "max",
+			provenanceMode: "mode=max",
+			assert:         assertProvenanceInputRequest,
+		},
+		{
+			name:           "min",
+			provenanceMode: "mode=min",
+			assert:         assertMinProvenanceInputRequest,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := registry + "/buildkit/provenance-input-same-" + tc.name + ":latest"
+			frontend := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+				st, metadata, err := solveProvenanceInputProducer(ctx, c, f)
+				if err != nil {
+					return nil, err
+				}
+				return solveProvenanceInputConsumer(ctx, c, f, st, metadata)
+			}
+
+			_, err = c.Build(ctx, client.SolveOpt{
+				FrontendAttrs: map[string]string{
+					"attest:provenance": tc.provenanceMode,
+				},
+				Exports: []client.ExportEntry{{
+					Type: client.ExporterImage,
+					Attrs: map[string]string{
+						"name": target,
+						"push": "true",
+					},
+				}},
+				LocalMounts: map[string]fsutil.FS{
+					dockerui.DefaultLocalNameDockerfile: dir,
+					dockerui.DefaultLocalNameContext:    dir,
+				},
+			}, "", frontend, nil)
+			require.NoError(t, err)
+
+			pred := readNativeProvenancePredicate(ctx, t, target)
+			tc.assert(t, f, pred)
+		})
 	}
-
-	_, err = c.Build(ctx, client.SolveOpt{
-		FrontendAttrs: map[string]string{
-			"attest:provenance": "mode=max",
-		},
-		Exports: []client.ExportEntry{{
-			Type: client.ExporterImage,
-			Attrs: map[string]string{
-				"name": target,
-				"push": "true",
-			},
-		}},
-		LocalMounts: map[string]fsutil.FS{
-			dockerui.DefaultLocalNameDockerfile: dir,
-			dockerui.DefaultLocalNameContext:    dir,
-		},
-	}, "", frontend, nil)
-	require.NoError(t, err)
-
-	pred := readNativeProvenancePredicate(ctx, t, target)
-	assertProvenanceInputRequest(t, f, pred)
 }
 
 // testGatewayProvenanceDifferentCallbackInputProducer verifies that producer
@@ -1669,6 +1687,7 @@ COPY --from=linked /foo /foo
 func solveProvenanceInputProducer(ctx context.Context, c gateway.Client, f frontendGateway) (llb.State, string, error) {
 	return solveProvenanceNamedTarget(ctx, c, f, "base", map[string]string{
 		"build-arg:BASE_TEXT": "from-input",
+		"label:input":         "from-input",
 	})
 }
 
@@ -1713,6 +1732,7 @@ func solveProvenanceInputProducerWithInner(ctx context.Context, c gateway.Client
 		FrontendOpt: map[string]string{
 			"target":               "base",
 			"build-arg:BASE_TEXT":  "from-input",
+			"label:input":          "from-input",
 			"context:inner":        "input:innerinput",
 			"input-metadata:inner": innerMetadata,
 		},
@@ -1776,6 +1796,24 @@ func assertProvenanceInputRequest(t *testing.T, f frontendGateway, pred provenan
 	assertFrontendRequest(t, f, in.Request)
 	require.Equal(t, "base", in.Request.Args["target"])
 	require.Equal(t, "from-input", in.Request.Args["build-arg:BASE_TEXT"])
+	require.Equal(t, "from-input", in.Request.Args["label:input"])
+	require.Nil(t, in.Request.Root)
+}
+
+func assertMinProvenanceInputRequest(t *testing.T, f frontendGateway, pred provenancetypes.ProvenancePredicateSLSA1) {
+	req := pred.BuildDefinition.ExternalParameters.Request
+	assertFrontendRequest(t, f, &req)
+	require.Equal(t, "input:baseinput", req.Args["context:linked"])
+	require.Contains(t, req.Args, "input-metadata:linked")
+	require.Contains(t, req.Inputs, "baseinput")
+	require.False(t, pred.RunDetails.Metadata.Completeness.Request)
+
+	in := req.Inputs["baseinput"]
+	require.NotNil(t, in.Request)
+	assertFrontendRequest(t, f, in.Request)
+	require.Equal(t, "base", in.Request.Args["target"])
+	require.NotContains(t, in.Request.Args, "build-arg:BASE_TEXT")
+	require.NotContains(t, in.Request.Args, "label:input")
 	require.Nil(t, in.Request.Root)
 }
 

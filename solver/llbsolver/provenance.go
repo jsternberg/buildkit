@@ -407,17 +407,9 @@ func NewProvenanceCreator(ctx context.Context, slsaVersion provenancetypes.Prove
 
 	switch mode {
 	case "min":
-		args := make(map[string]string)
-		for k, v := range pr.BuildDefinition.ExternalParameters.Request.Args {
-			if strings.HasPrefix(k, "build-arg:") || strings.HasPrefix(k, "label:") {
-				pr.RunDetails.Metadata.Completeness.Request = false
-				continue
-			}
-			args[k] = v
+		if scrubMinRequest(&pr.BuildDefinition.ExternalParameters.Request) {
+			pr.RunDetails.Metadata.Completeness.Request = false
 		}
-		pr.BuildDefinition.ExternalParameters.Request.Args = args
-		pr.BuildDefinition.ExternalParameters.Request.Secrets = nil
-		pr.BuildDefinition.ExternalParameters.Request.SSH = nil
 	case "max":
 		dgsts, err := provenance.AddBuildConfig(ctx, pr, cp, res, withUsage)
 		if err != nil {
@@ -486,6 +478,41 @@ func NewProvenanceCreator(ctx context.Context, slsaVersion provenancetypes.Prove
 		pc.sampler = usage
 	}
 	return pc, nil
+}
+
+func scrubMinRequest(req *provenancetypes.Parameters) bool {
+	if req == nil {
+		return false
+	}
+
+	var incomplete bool
+	if len(req.Args) > 0 {
+		args := make(map[string]string, len(req.Args))
+		for k, v := range req.Args {
+			if strings.HasPrefix(k, "build-arg:") || strings.HasPrefix(k, "label:") {
+				incomplete = true
+				continue
+			}
+			args[k] = v
+		}
+		req.Args = args
+	}
+	if len(req.Secrets) > 0 {
+		req.Secrets = nil
+	}
+	if len(req.SSH) > 0 {
+		req.SSH = nil
+	}
+
+	for _, in := range req.Inputs {
+		if in != nil && scrubMinRequest(in.Request) {
+			incomplete = true
+		}
+	}
+	if req.Root != nil && scrubMinRequest(req.Root.Request) {
+		incomplete = true
+	}
+	return incomplete
 }
 
 func (p *ProvenanceCreator) PredicateType() string {

@@ -36,7 +36,7 @@ require (
 	github.com/containernetworking/plugins v1.9.1
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.4.0+incompatible
+	github.com/docker/cli v29.4.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.13.0
 	github.com/golang/protobuf v1.5.4
@@ -54,7 +54,7 @@ require (
 	github.com/moby/locker v1.0.1
 	github.com/moby/patternmatcher v0.6.1
 	github.com/moby/policy-helpers v0.0.0-20260324161837-b7c0b994300b
-	github.com/moby/profiles/seccomp v0.1.0
+	github.com/moby/profiles/seccomp v0.2.3
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/reexec v0.1.0
 	github.com/moby/sys/signal v0.7.1

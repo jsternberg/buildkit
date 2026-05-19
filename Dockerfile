@@ -48,17 +48,21 @@ FROM golatest AS gobuild-base
 RUN apk add --no-cache file bash clang lld musl-dev pkgconfig git make
 COPY --link --from=xx / /
 
-# runc builds runc binary
-FROM gobuild-base AS runc
-WORKDIR $GOPATH/src/github.com/opencontainers/runc
+# runc-src retrieves the runc source code
+FROM scratch AS runc-src
 ARG RUNC_VERSION
 ADD --keep-git-dir=true "https://github.com/opencontainers/runc.git#$RUNC_VERSION" .
-ARG TARGETPLATFORM
+
+# runc builds runc binary
+FROM gobuild-base AS runc
 # gcc is only installed for libgcc
 # lld has issues building static binaries for ppc so prefer ld for it
 RUN set -e; xx-apk add musl-dev gcc libseccomp-dev libseccomp-static; \
   [ "$(xx-info arch)" != "ppc64le" ] || XX_CC_PREFER_LINKER=ld xx-clang --setup-target-triple
-RUN --mount=target=/root/.cache,type=cache <<EOT
+WORKDIR $GOPATH/src/github.com/opencontainers/runc
+ARG TARGETPLATFORM
+RUN --mount=target=.,from=runc-src \
+    --mount=target=/root/.cache,type=cache <<EOT
   set -ex
   CGO_ENABLED=1 xx-go build -mod=vendor -ldflags '-extldflags -static' -tags 'apparmor seccomp netgo cgo static_build osusergo' -o /usr/bin/runc ./
   xx-verify --static /usr/bin/runc

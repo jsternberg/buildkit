@@ -1,11 +1,9 @@
 package sqlitecachestorage
 
 import (
-	"context"
-	"database/sql"
-	"strings"
 	"sync"
-	"text/template"
+
+	"github.com/moby/buildkit/util/sql/template"
 )
 
 const (
@@ -136,13 +134,9 @@ WHERE target_record NOT IN live_records
 var (
 	deleteRecordsSQL = tmpl("deleteRecordsSQL", `
 DELETE FROM cache_records
-WHERE record_id IN ({{range .}}{{if ne . 0}},{{end}}?{{end}})
+WHERE record_id IN ({{range $i, $e := .}}{{if ne $i 0}},{{end}}{{bind $e}}{{end}})
 `)
 )
-
-type sqlTemplate struct {
-	fn func() *template.Template
-}
 
 // tmpl generates an sql template from the given text.
 // SQL templates are used to generate queries with varied
@@ -154,28 +148,8 @@ type sqlTemplate struct {
 // This is to protect against accidental programmer error related to
 // SQL injection since arguments should never be used outside of
 // prepared statements.
-func tmpl(name, text string) *sqlTemplate {
-	fn := sync.OnceValue(func() *template.Template {
+func tmpl(name, text string) func() *template.Template {
+	return sync.OnceValue(func() *template.Template {
 		return template.Must(template.New(name).Parse(text))
 	})
-	return &sqlTemplate{fn}
-}
-
-func (t *sqlTemplate) Exec(ctx context.Context, db StatementPreparer, args ...any) (sql.Result, error) {
-	var sb strings.Builder
-	if err := t.fn().Execute(&sb, len(args)); err != nil {
-		return nil, err
-	}
-
-	stmt, err := db.PrepareContext(ctx, sb.String())
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	return stmt.ExecContext(ctx, args...)
-}
-
-type StatementPreparer interface {
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }

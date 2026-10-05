@@ -325,7 +325,7 @@ func (s *Store) ReleaseUnreferenced(ctx context.Context) error {
 	}
 
 	// Delete cache records that do not reference a valid record.
-	res, err := deleteRecordsSQL.Exec(ctx, tx, missing...)
+	res, err := deleteRecordsSQL().ExecContext(ctx, tx, missing)
 	if err != nil {
 		return err
 	}

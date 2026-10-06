@@ -309,6 +309,18 @@ type CacheStorage interface {
 	// possible match.
 	Query(deps []CacheKeyWithSelector, inputIndex Index, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
 
+	// Select is a more advanced version of Query that allows specifying multiple dependency
+	// selectors. When dependencies are present, cache keys are selected from an intersection
+	// of the various inputs and within each input the cache keys are the union. It is an AND
+	// relationship between dependencies and an OR relationship within a dependency.
+	//
+	// If offset is non-zero, then the first index in deps is the input at that index
+	// instead of zero. If a dependency is empty, then that index is skipped. If deps
+	// is empty, this will return the root key.
+	//
+	// If this functionality is not implemented, then this method will return ErrNotImplemented.
+	Select(ctx context.Context, deps [][]CacheKeyWithSelector, offset, limit int, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error)
+
 	// Records returns the cache records associated with a cache key.
 	Records(ctx context.Context, ck *CacheKey) ([]*CacheRecord, error)
 

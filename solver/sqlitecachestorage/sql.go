@@ -61,17 +61,6 @@ WHERE source_record = ?
 LIMIT 1;
 `
 
-	queryLinksSQL = `
-SELECT target_record
-FROM cache_links
-WHERE source_record = ?
-  AND digest = ?
-	AND output_index = ?
-  AND input_index = ?
-	AND selector = ?
-ORDER BY target_record ASC;
-`
-
 	selectRecordsSQL = `
 SELECT record_id, created_at
 FROM cache_records
@@ -108,8 +97,8 @@ WITH
 	)
 SELECT cache_records.id AS id
 FROM cache_records
-WHERE id != ? AND record_id = ?
 NATURAL JOIN root_records
+WHERE id != ? AND record_id = ?
 ORDER BY id ASC;
 `
 
@@ -132,6 +121,37 @@ WHERE target_record NOT IN live_records
 )
 
 var (
+	queryLinksSQL = tmpl("queryLinksSQL", `
+SELECT DISTINCT target_record AS id
+FROM cache_links
+WHERE (source_record, selector) IN ({{range $i, $d := .Deps}}{{if ne $i 0}},{{end}}({{bind $d.CacheKey.ID}}, {{bind $d.Selector}}){{end}})
+	AND digest = {{bind .Digest}}
+  AND output_index = {{bind .Output}}
+	AND input_index = {{bind .Input}}
+ORDER BY id ASC
+`)
+
+	selectKeysSQL = tmpl("selectKeysSQL", `
+WITH
+	filtered_cache_links (source_record, input_index, selector, target_record) AS (
+		SELECT source_record, input_index{{if ne .Offset 0}} - {{bind .Offset}}{{end}}, selector, target_record
+		FROM cache_links
+		WHERE digest = {{bind .Digest}}
+		  AND output_index = {{bind .Output}}
+	)
+SELECT DISTINCT target_record FROM filtered_cache_links
+{{range $i, $d := .Deps}}{{if ne (len $d) 0}}
+INTERSECT
+SELECT target_record FROM filtered_cache_links
+WHERE (source_record, selector) IN ({{range $ii, $dd := $d}}
+	{{if ne $ii 0}},{{end}}({{bind $dd.CacheKey.ID}}, {{bind $dd.Selector}})
+	{{end}})
+  AND input_index = {{$i}}
+{{end}}{{end}}
+ORDER BY target_record ASC
+{{if ne .Limit 0}}LIMIT {{.Limit}}{{end}}
+`)
+
 	deleteRecordsSQL = tmpl("deleteRecordsSQL", `
 DELETE FROM cache_records
 WHERE record_id IN ({{range $i, $e := .}}{{if ne $i 0}},{{end}}{{bind $e}}{{end}})

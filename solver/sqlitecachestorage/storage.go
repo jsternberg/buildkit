@@ -66,43 +66,85 @@ func (s *Store) Query(deps []solver.CacheKeyWithSelector, input solver.Index, dg
 		return []*solver.CacheKey{{ID: id.String()}}, nil
 	}
 
-	ids := make(map[string]struct{})
-	args := []any{nil, dgst, int(output), int(input), ""}
-	// TODO: can optimize this sql query so there's only one query.
-	for _, dep := range deps {
-		args[0], args[4] = dep.CacheKey.ID, dep.Selector
-		rows, err := s.db.QueryContext(context.TODO(), queryLinksSQL, args...)
-		if err != nil {
+	data := struct {
+		Deps   []solver.CacheKeyWithSelector
+		Digest string
+		Output int
+		Input  int
+	}{
+		Deps:   deps,
+		Digest: string(dgst),
+		Output: int(output),
+		Input:  int(input),
+	}
+
+	rows, err := queryLinksSQL().QueryContext(context.TODO(), s.db, data)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []*solver.CacheKey
+	for rows.Next() {
+		key := &solver.CacheKey{}
+		if err := rows.Scan(&key.ID); err != nil {
+			rows.Close()
 			return nil, err
 		}
+		keys = append(keys, key)
+	}
 
-		var id string
-		for rows.Next() {
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return nil, err
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return keys, rows.Err()
+}
+
+func (s *Store) Select(ctx context.Context, deps [][]solver.CacheKeyWithSelector, offset, limit int, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
+	if len(deps) == 0 {
+		var exists int
+		id := rootKey(dgst, outputIndex)
+		if err := s.db.QueryRowContext(context.TODO(), linkExistsSQL, id).Scan(&exists); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
 			}
-			ids[id] = struct{}{}
-		}
-
-		if err := rows.Close(); err != nil {
 			return nil, err
 		}
+		return []*solver.CacheKey{{ID: id.String()}}, nil
+	}
 
-		if err := rows.Err(); err != nil {
+	data := struct {
+		Deps   [][]solver.CacheKeyWithSelector
+		Offset int
+		Limit  int
+		Digest string
+		Output int
+	}{
+		Deps:   deps,
+		Offset: offset,
+		Limit:  limit,
+		Digest: string(dgst),
+		Output: int(outputIndex),
+	}
+
+	rows, err := selectKeysSQL().QueryContext(context.TODO(), s.db, data)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []*solver.CacheKey
+	for rows.Next() {
+		key := &solver.CacheKey{}
+		if err := rows.Scan(&key.ID); err != nil {
+			rows.Close()
 			return nil, err
 		}
+		keys = append(keys, key)
 	}
 
-	if len(ids) == 0 {
-		return nil, nil
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
-
-	keys := make([]*solver.CacheKey, 0, len(ids))
-	for id := range ids {
-		keys = append(keys, &solver.CacheKey{ID: id})
-	}
-	return keys, nil
+	return keys, rows.Err()
 }
 
 func (s *Store) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.CacheRecord, error) {
@@ -120,10 +162,11 @@ func (s *Store) Records(ctx context.Context, ck *solver.CacheKey) ([]*solver.Cac
 		}
 		records = append(records, &record)
 	}
-	if err := rows.Err(); err != nil {
+
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	return records, nil
+	return records, rows.Err()
 }
 
 func (s *Store) Load(ctx context.Context, key *solver.CacheKey, id string) (solver.Result, error) {

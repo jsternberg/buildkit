@@ -2,6 +2,7 @@ package solver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -278,6 +279,16 @@ func (c *cacheManager) getKeyFromDeps(k *CacheKey) (ck *CacheKey) {
 	// Resolve the cache keys for the dependencies.
 	for _, deps := range ck.deps {
 		c.resolveDepKeys(deps)
+	}
+
+	if keys, err := c.storage.Select(context.TODO(), ck.deps, 0, 1, ck.Digest(), ck.Output()); err == nil {
+		if len(keys) == 0 {
+			return withArbitraryIdentity(ck)
+		}
+		ck.ID = keys[0].ID
+		return ck
+	} else if !errors.Is(err, ErrNotImplemented) {
+		return withArbitraryIdentity(ck)
 	}
 
 	// Cache keys for dependencies have been fully resolved so we can

@@ -86,6 +86,10 @@ func (c *kvCacheStorage) Query(deps []CacheKeyWithSelector, input Index, dgst di
 	return keys, nil
 }
 
+func (c *kvCacheStorage) Select(ctx context.Context, deps [][]CacheKeyWithSelector, offset, limit int, dgst digest.Digest, outputIndex Index) ([]*CacheKey, error) {
+	return nil, ErrNotImplemented
+}
+
 func (c *kvCacheStorage) newKeyWithID(id string, dgst digest.Digest, output Index) *CacheKey {
 	k := newKey()
 	k.digest = dgst

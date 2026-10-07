@@ -121,16 +121,6 @@ WHERE target_record NOT IN live_records
 )
 
 var (
-	queryLinksSQL = tmpl("queryLinksSQL", `
-SELECT DISTINCT target_record AS id
-FROM cache_links
-WHERE (source_record, selector) IN ({{range $i, $d := .Deps}}{{if ne $i 0}},{{end}}({{bind $d.CacheKey.ID}}, {{bind $d.Selector}}){{end}})
-	AND digest = {{bind .Digest}}
-  AND output_index = {{bind .Output}}
-	AND input_index = {{bind .Input}}
-ORDER BY id ASC
-`)
-
 	selectKeysSQL = tmpl("selectKeysSQL", `
 WITH
 	filtered_cache_links (source_record, input_index, selector, target_record) AS (

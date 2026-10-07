@@ -55,48 +55,11 @@ func (s *Store) autoMigrate() error {
 
 func (s *Store) Query(deps []solver.CacheKeyWithSelector, input solver.Index, dgst digest.Digest, output solver.Index) ([]*solver.CacheKey, error) {
 	if len(deps) == 0 {
-		var exists int
-		id := rootKey(dgst, output)
-		if err := s.db.QueryRowContext(context.TODO(), linkExistsSQL, id).Scan(&exists); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, nil
-			}
-			return nil, err
-		}
-		return []*solver.CacheKey{{ID: id.String()}}, nil
+		return s.Select(context.TODO(), nil, 0, 0, dgst, output)
 	}
-
-	data := struct {
-		Deps   []solver.CacheKeyWithSelector
-		Digest string
-		Output int
-		Input  int
-	}{
-		Deps:   deps,
-		Digest: string(dgst),
-		Output: int(output),
-		Input:  int(input),
-	}
-
-	rows, err := queryLinksSQL().QueryContext(context.TODO(), s.db, data)
-	if err != nil {
-		return nil, err
-	}
-
-	var keys []*solver.CacheKey
-	for rows.Next() {
-		key := &solver.CacheKey{}
-		if err := rows.Scan(&key.ID); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		keys = append(keys, key)
-	}
-
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	return keys, rows.Err()
+	var cks [1][]solver.CacheKeyWithSelector
+	cks[0] = deps
+	return s.Select(context.TODO(), cks[:], int(input), 0, dgst, output)
 }
 
 func (s *Store) Select(ctx context.Context, deps [][]solver.CacheKeyWithSelector, offset, limit int, dgst digest.Digest, outputIndex solver.Index) ([]*solver.CacheKey, error) {
